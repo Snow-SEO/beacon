@@ -64,7 +64,8 @@
 		"dev": "tsup --watch",
 		"type-check": "tsc --noEmit",
 		"test": "node --import tsx/esm --test test/**/*.test.ts",
-		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test"
+		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test",
+		"prepare": "pnpm run build"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
