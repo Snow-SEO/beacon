@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	createFetchMiddleware,
+	type FetchMiddlewareContext,
+} from "../src/adapters/fetch.js";
+import {
 	beaconAdvertise,
 	beaconMiddleware,
 	createBeaconRouteHandler,
@@ -163,5 +167,66 @@ describe("next adapter", () => {
 			(await GET(new Request("https://e.com/missing.md"))).status,
 			404,
 		);
+	});
+});
+
+describe("fetch adapter", () => {
+	function astroLikeContext(request: Request): FetchMiddlewareContext {
+		const context = { request } as FetchMiddlewareContext;
+		Object.defineProperty(context, "clientAddress", {
+			enumerable: true,
+			get() {
+				throw new Error("clientAddress is not available on prerendered routes");
+			},
+		});
+		return context;
+	}
+
+	it("serves a twin without touching unrelated context properties", async () => {
+		const request = new Request("https://e.com/pricing", {
+			headers: { accept: "text/markdown" },
+		});
+		const middleware = createFetchMiddleware(beacon);
+
+		const response = await middleware(astroLikeContext(request), () => {
+			throw new Error("next() should not run when a twin is served");
+		});
+
+		assert.equal(response.status, 200);
+		assert.match(response.headers.get("content-type") ?? "", MARKDOWN_TYPE);
+	});
+
+	it("advertises a twin without touching unrelated context properties", async () => {
+		const request = new Request("https://e.com/pricing");
+		const middleware = createFetchMiddleware(beacon);
+		const html = new Response("<h1>Pricing</h1>", {
+			headers: { "content-type": "text/html" },
+		});
+
+		const response = await middleware(
+			astroLikeContext(request),
+			async () => html,
+		);
+
+		assert.match(
+			response.headers.get("link") ?? "",
+			/<\/pricing\.md>; rel="alternate"/,
+		);
+		assert.match(response.headers.get("vary") ?? "", /Accept/);
+	});
+
+	it("passes a page with no twin straight through", async () => {
+		const request = new Request("https://e.com/about");
+		const middleware = createFetchMiddleware(beacon);
+		const html = new Response("<h1>About</h1>", {
+			headers: { "content-type": "text/html" },
+		});
+
+		const response = await middleware(
+			astroLikeContext(request),
+			async () => html,
+		);
+
+		assert.equal(response.headers.get("link"), null);
 	});
 });

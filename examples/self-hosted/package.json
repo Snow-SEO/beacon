@@ -1,0 +1,26 @@
+{
+	"name": "beacon-example-self-hosted",
+	"private": true,
+	"type": "module",
+	"description": "An Express site reporting to your own beacon collector. No SnowSEO account.",
+	"scripts": {
+		"build:twins": "beacon build site --site-url http://localhost:3000",
+		"build": "pnpm build:twins",
+		"collector": "beacon-server",
+		"site": "tsx src/site.ts",
+		"dev": "pnpm build:twins && concurrently -n collector,site -c cyan,green \"pnpm collector\" \"pnpm site\"",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@snowseo/beacon": "^0.1.0",
+		"@snowseo/beacon-server": "^0.1.0",
+		"express": "^5.1.0"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.0",
+		"@types/node": "^22.10.2",
+		"concurrently": "^9.1.0",
+		"tsx": "^4.19.2",
+		"typescript": "5.9.2"
+	}
+}

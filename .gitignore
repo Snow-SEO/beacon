@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.next/
+.astro/
 .turbo/
 *.tsbuildinfo
 
@@ -7,3 +9,8 @@ dist/
 beacon.db
 beacon.db-shm
 beacon.db-wal
+
+.env
+examples/self-hosted/site/*.md
+examples/self-hosted/site/llms.txt
+examples/self-hosted/site/sitemap-md.xml

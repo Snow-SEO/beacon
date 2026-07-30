@@ -1,0 +1,26 @@
+---
+const title = "Widgets that fit";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{title}</title>
+    <meta name="description" content="A demo site for the beacon Astro example." />
+  </head>
+  <body>
+    <main>
+      <h1>{title}</h1>
+      <p>
+        Run <code>pnpm build</code> and a <code>.md</code> twin appears next to
+        every page in <code>dist</code>. The middleware serves it when a client
+        negotiates for it.
+      </p>
+      <h2>Why twins</h2>
+      <p>
+        An AI client reading HTML spends most of its context on markup it will
+        throw away. The twin is the same content without the chrome.
+      </p>
+    </main>
+  </body>
+</html>

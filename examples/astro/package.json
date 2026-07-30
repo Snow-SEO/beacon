@@ -1,0 +1,21 @@
+{
+	"name": "beacon-example-astro",
+	"private": true,
+	"type": "module",
+	"description": "Astro with prebuilt Markdown twins. The one framework the middleware exports into directly.",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build && beacon build dist --site-url http://localhost:4321",
+		"preview": "astro preview",
+		"type-check": "astro check"
+	},
+	"dependencies": {
+		"@snowseo/beacon": "^0.1.0",
+		"astro": "^5.13.0"
+	},
+	"devDependencies": {
+		"@astrojs/check": "^0.9.4",
+		"@types/node": "^22.10.2",
+		"typescript": "5.9.2"
+	}
+}

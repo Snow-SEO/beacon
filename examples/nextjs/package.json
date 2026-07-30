@@ -1,0 +1,23 @@
+{
+	"name": "beacon-example-nextjs",
+	"private": true,
+	"type": "module",
+	"description": "Next.js App Router with Markdown twins served from a content source.",
+	"scripts": {
+		"dev": "next dev",
+		"build": "next build",
+		"start": "next start",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@snowseo/beacon": "^0.1.0",
+		"next": "^15.5.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"@types/react": "^19.0.0",
+		"typescript": "5.9.2"
+	}
+}

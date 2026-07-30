@@ -13,7 +13,9 @@ export function createFetchMiddleware(
 	next: () => Promise<Response>,
 ) => Promise<Response> {
 	return async (context, next) => {
-		const markdown = await beacon.handle(context.request, context);
+		const { request, waitUntil } = context;
+
+		const markdown = await beacon.handle(request, { waitUntil });
 		if (markdown) {
 			return markdown;
 		}
@@ -21,8 +23,8 @@ export function createFetchMiddleware(
 		if (!response.headers.get("content-type")?.includes(HTML_TYPE)) {
 			return response;
 		}
-		return beacon.advertiseIfPresent(context.request, response, {
-			...context,
+		return beacon.advertiseIfPresent(request, response, {
+			waitUntil,
 			statusCode: response.status,
 		});
 	};

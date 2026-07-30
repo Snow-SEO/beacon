@@ -17,7 +17,9 @@
 		"check:write": "biome check --write .",
 		"type-check": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server type-check",
 		"test": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server test",
-		"start": "pnpm --filter @snowseo/beacon-server start"
+		"start": "pnpm --filter @snowseo/beacon-server start",
+		"examples:type-check": "pnpm --filter \"./examples/*\" type-check",
+		"examples:build": "pnpm --filter \"./examples/*\" build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.6"

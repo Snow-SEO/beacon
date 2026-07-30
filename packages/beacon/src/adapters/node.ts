@@ -7,9 +7,6 @@ export interface NodeRequestLike {
 	url?: string;
 	method?: string;
 	headers: Record<string, string | string[] | undefined>;
-	socket?: {
-		encrypted?: boolean;
-	};
 }
 
 export interface NodeResponseLike {

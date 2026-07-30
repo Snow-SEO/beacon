@@ -27,3 +27,19 @@ jobs:
       - run: pnpm build
       - run: pnpm type-check
       - run: pnpm test
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm examples:type-check
+      - run: pnpm examples:build
