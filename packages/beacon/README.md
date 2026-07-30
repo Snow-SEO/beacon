@@ -351,7 +351,7 @@ BEACON_KEYS=$(openssl rand -hex 24) npx @snowseo/beacon-server
 Point `endpoint` at it and the hits go there instead. `@snowseo/beacon-server` is MIT, does the same
 classification and verification production does, and stores to SQLite or Postgres. The wire contract is
 frozen and documented, so a collector you write yourself is equally valid - see
-[PROTOCOL.md](../beacon-server/PROTOCOL.md).
+[PROTOCOL.md](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon-server/PROTOCOL.md).
 
 Hits are sent to the collector as a single JSON POST authenticated with an `X-Beacon-Key` header, not
 `Authorization` - the key identifies a site rather than a user, and it has to survive proxies that strip
@@ -419,4 +419,4 @@ If your zone has Cloudflare's *Markdown for Agents* enabled, keep it. Cloudflare
 
 ## License
 
-[MIT](./LICENSE.md).
+[MIT](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon/LICENSE.md).

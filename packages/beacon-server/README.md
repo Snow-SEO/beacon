@@ -6,7 +6,7 @@ server you can run instead of sending your traffic to SnowSEO.
 Server-side crawler verification for beacon hits. The half of AI-crawler
 tracking that cannot live on the site being crawled.
 
-[`@snowseo/beacon`](../beacon) runs on your web server and reports raw facts
+[`@snowseo/beacon`](https://github.com/Snow-SEO/beacon/tree/main/packages/beacon) runs on your web server and reports raw facts
 about a request: the User-Agent, the source IP, whether markdown was negotiated,
 whether Web Bot Auth headers were present. It deliberately draws no conclusions.
 This package draws them.
@@ -109,7 +109,7 @@ define('SNOWSEO_BEACON_KEY', 'the key you generated');
 Two routes, no more: `POST /v3/beacon/hits` and `GET /health`. Dashboards, stats
 APIs and attribution are not part of it - the server records classified,
 verified hits, and what you do with them is yours. The full wire contract is in
-[PROTOCOL.md](./PROTOCOL.md).
+[PROTOCOL.md](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon-server/PROTOCOL.md).
 
 ### Docker
 
@@ -117,7 +117,7 @@ verified hits, and what you do with them is yours. The full wire contract is in
 BEACON_KEYS=$(openssl rand -hex 24) docker compose up -d
 ```
 
-The [compose file](./docker-compose.yml) runs SQLite on a volume by default and
+The [compose file](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon-server/docker-compose.yml) runs SQLite on a volume by default and
 has a `postgres` profile.
 
 ### Configuration
@@ -167,4 +167,4 @@ Implement `HitStore` to plug in your own persistence, or subclass one of
 
 ## License
 
-[MIT](./LICENSE.md).
+[MIT](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon-server/LICENSE.md).

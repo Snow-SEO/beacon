@@ -1,0 +1,55 @@
+# Changelog
+
+Both packages are released together and share a version.
+
+## 0.1.1
+
+Two bugs, both found by writing the [examples](./examples) rather than by the
+test suite - the existing tests passed throughout, because they exercised the
+adapters with plain objects rather than what a real framework hands you.
+
+### Fixed
+
+- **`createFetchMiddleware` broke `astro build`.** The middleware spread its
+  context to pass it along, and spreading Astro's `APIContext` invokes every
+  getter on it - including `clientAddress`, which throws on a prerendered
+  route. A static Astro build failed outright. It only ever needed `waitUntil`,
+  so it now takes that and nothing else. ([`fetch.ts`](./packages/beacon/src/adapters/fetch.ts))
+
+- **`beaconExpress` did not type-check against `@types/express`.**
+  `NodeRequestLike` declared `socket?: { encrypted?: boolean }`, which nothing
+  read. An interface whose only members are optional is a "weak type", and
+  TypeScript rejects a value with no properties in common - Node's `net.Socket`
+  has no `encrypted`, so a real `express.Request` was refused and
+  `app.use(beaconExpress(beacon))` failed to compile. The dead field is gone.
+  ([`node.ts`](./packages/beacon/src/adapters/node.ts))
+
+- **`@snowseo/beacon-server` pinned an exact client version.** Its dependency
+  was `workspace:*`, which pnpm publishes as `"0.1.0"` rather than a range, so a
+  patch to `@snowseo/beacon` could never reach anyone who installed the server.
+  Now `workspace:^`, published as a caret range.
+
+### Added
+
+- Three runnable TypeScript examples: a self-hosted collector, Next.js, and
+  Astro. They resolve the local packages in-repo and run in CI, so a breaking
+  change fails before a release rather than after one.
+
+- Regression tests covering the fetch adapter against a getter-backed context,
+  which is what actually reproduces the Astro failure.
+
+### Upgrading
+
+No API changed. `NodeRequestLike` lost an optional member, so the only way to
+notice is if you assigned an object literal that set `socket` - remove it.
+
+## 0.1.0
+
+Initial release.
+
+- `@snowseo/beacon` - Markdown twin generation and serving, content negotiation,
+  crawler reporting. Adapters for Next.js, Express and any Fetch-API runtime,
+  plus the `beacon build` CLI.
+- `@snowseo/beacon-server` - crawler verification from published IP ranges,
+  datacenter detection, reverse DNS and Web Bot Auth, plus a reference ingest
+  server with SQLite and Postgres stores.
