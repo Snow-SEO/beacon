@@ -1,0 +1,36 @@
+services:
+  beacon:
+    build: .
+    image: ghcr.io/snow-seo/beacon-server:latest
+    restart: unless-stopped
+    ports:
+      - "${BEACON_PORT:-8787}:8787"
+    environment:
+      BEACON_KEYS: ${BEACON_KEYS:?set BEACON_KEYS, e.g. export BEACON_KEYS=$(openssl rand -hex 24)}
+      BEACON_IP_MODE: ${BEACON_IP_MODE:-hash}
+      BEACON_IP_SALT: ${BEACON_IP_SALT:-}
+      BEACON_STORE: ${BEACON_STORE:-sqlite}
+      BEACON_SQLITE_PATH: /data/beacon.db
+      BEACON_POSTGRES_URL: ${BEACON_POSTGRES_URL:-}
+    volumes:
+      - beacon-data:/data
+
+  postgres:
+    profiles: ["postgres"]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: beacon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beacon}
+      POSTGRES_DB: beacon
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beacon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - beacon-postgres:/var/lib/postgresql/data
+
+volumes:
+  beacon-data:
+  beacon-postgres:

@@ -1,0 +1,55 @@
+name: Bug report
+description: Something behaves differently from how it is documented.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - "@snowseo/beacon (client)"
+        - "@snowseo/beacon-server (verification / ingest server)"
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Runtime and version, framework, host. For PHP, the version and SAPI.
+      placeholder: "Node 24.1 / Next.js 15 / Vercel"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        The smallest sequence that shows it. If it involves a specific crawler
+        or request, the exact User-Agent and headers help more than a summary.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Redact any beacon key before pasting. It authenticates writes for your whole site.
+      render: text

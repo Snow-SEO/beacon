@@ -1,0 +1,25 @@
+{
+	"name": "beacon-workspace",
+	"private": true,
+	"description": "Source for @snowseo/beacon and @snowseo/beacon-server.",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Snow-SEO/beacon.git"
+	},
+	"packageManager": "pnpm@10.32.0",
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"build": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server build",
+		"check": "biome check .",
+		"check:write": "biome check --write .",
+		"type-check": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server type-check",
+		"test": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server test",
+		"start": "pnpm --filter @snowseo/beacon-server start"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.6"
+	}
+}

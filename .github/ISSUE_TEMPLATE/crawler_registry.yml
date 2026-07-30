@@ -1,0 +1,59 @@
+name: Add or correct a crawler
+description: A crawler beacon does not recognise, or recognises wrongly.
+labels: ["registry"]
+body:
+  - type: input
+    id: token
+    attributes:
+      label: User-Agent token to match
+      description: The distinguishing substring, lowercase. Not the whole User-Agent.
+      placeholder: "gptbot"
+    validations:
+      required: true
+
+  - type: input
+    id: ua
+    attributes:
+      label: A full User-Agent you have observed
+      placeholder: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot"
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: Spelled as it is for that provider's other agents, if any are already listed.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - answer_fetch (a person's assistant is reading the page for them)
+        - search_index (indexing for an AI search product)
+        - training (collecting corpus)
+        - ai_crawler (something else a model vendor runs)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: docs
+    attributes:
+      label: Link to the provider's documentation of this agent
+      description: |
+        Required. A log line is not enough on its own - a wrong entry silently
+        mislabels real traffic, which is worse than not matching it at all.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Published IP ranges or reverse-DNS suffix, if any
+      description: |
+        A range feed URL, an ASN, or the PTR suffix its addresses resolve under.
+        This is what moves a hit from `unverified` to `verified`.

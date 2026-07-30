@@ -1,0 +1,82 @@
+{
+	"name": "@snowseo/beacon-server",
+	"version": "0.1.0",
+	"description": "Server side of the beacon protocol: AI crawler verification (provider IP ranges, datacenter detection, reverse DNS, Web Bot Auth) plus a reference ingest server.",
+	"keywords": [
+		"ai",
+		"ai-crawlers",
+		"web-bot-auth",
+		"rfc-9421",
+		"bot-detection",
+		"gptbot",
+		"analytics",
+		"self-hosted"
+	],
+	"license": "MIT",
+	"homepage": "https://snowseo.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Snow-SEO/beacon.git",
+		"directory": "packages/beacon-server"
+	},
+	"bugs": {
+		"url": "https://github.com/Snow-SEO/beacon/issues"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"files": [
+		"dist",
+		"src",
+		"docker-compose.yml",
+		"Dockerfile",
+		"PROTOCOL.md",
+		"README.md",
+		"LICENSE.md"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./server": {
+			"types": "./dist/server/index.d.ts",
+			"default": "./dist/server/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"beacon-server": "./dist/bin/beacon-server.js"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"start": "node dist/bin/beacon-server.js",
+		"type-check": "tsc --noEmit",
+		"test": "node --import tsx/esm --test test/**/*.test.ts",
+		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test"
+	},
+	"dependencies": {
+		"@snowseo/beacon": "workspace:*"
+	},
+	"peerDependencies": {
+		"pg": "^8.11.0"
+	},
+	"peerDependenciesMeta": {
+		"pg": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"tsx": "^4.19.2",
+		"typescript": "5.9.2"
+	}
+}

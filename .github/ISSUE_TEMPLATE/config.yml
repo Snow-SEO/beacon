@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Snow-SEO/beacon/security/advisories/new
+    about: Report privately. Please do not open a public issue.
+  - name: PHP or WordPress client
+    url: https://github.com/Snow-SEO/snowseo-wordpress-plugin
+    about: The PHP client and WordPress plugin live in their own repository.
+  - name: Hosted SnowSEO support
+    url: https://snowseo.com
+    about: Dashboard, billing or account questions, rather than the open-source packages.
+  - name: Documentation
+    url: https://snowseo.com/docs
+    about: Install guides for every supported framework, and the self-hosting reference.

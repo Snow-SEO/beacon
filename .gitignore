@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Reference ingest server default store
+beacon.db
+beacon.db-shm
+beacon.db-wal

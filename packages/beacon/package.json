@@ -1,0 +1,75 @@
+{
+	"name": "@snowseo/beacon",
+	"version": "0.1.0",
+	"description": "Serve Markdown twins to AI crawlers, make them discoverable, and measure which crawlers actually arrive.",
+	"keywords": [
+		"ai",
+		"aeo",
+		"geo",
+		"markdown",
+		"llms-txt",
+		"ai-crawlers",
+		"gptbot",
+		"content-negotiation"
+	],
+	"license": "MIT",
+	"homepage": "https://snowseo.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Snow-SEO/beacon.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Snow-SEO/beacon/issues"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"LICENSE.md"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"bin": {
+		"beacon": "./dist/cli.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./next": {
+			"types": "./dist/next.d.ts",
+			"import": "./dist/next.js",
+			"require": "./dist/next.cjs"
+		},
+		"./node": {
+			"types": "./dist/node.d.ts",
+			"import": "./dist/node.js",
+			"require": "./dist/node.cjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"engines": {
+		"node": ">=18"
+	},
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"type-check": "tsc --noEmit",
+		"test": "node --import tsx/esm --test test/**/*.test.ts",
+		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"tsup": "^8.5.0",
+		"tsx": "^4.19.2",
+		"typescript": "5.9.2"
+	}
+}
