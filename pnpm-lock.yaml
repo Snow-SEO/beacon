@@ -15,7 +15,7 @@ importers:
   examples/astro:
     dependencies:
       '@snowseo/beacon':
-        specifier: ^0.1.1
+        specifier: ^0.1.2
         version: link:../../packages/beacon
       astro:
         specifier: ^5.13.0
@@ -34,7 +34,7 @@ importers:
   examples/nextjs:
     dependencies:
       '@snowseo/beacon':
-        specifier: ^0.1.1
+        specifier: ^0.1.2
         version: link:../../packages/beacon
       next:
         specifier: ^15.5.0
@@ -59,10 +59,10 @@ importers:
   examples/self-hosted:
     dependencies:
       '@snowseo/beacon':
-        specifier: ^0.1.1
+        specifier: ^0.1.2
         version: link:../../packages/beacon
       '@snowseo/beacon-server':
-        specifier: ^0.1.1
+        specifier: ^0.1.2
         version: link:../../packages/beacon-server
       express:
         specifier: ^5.1.0

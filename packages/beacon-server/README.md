@@ -89,7 +89,7 @@ hits go there instead:
 
 ```bash
 BEACON_KEYS=$(openssl rand -hex 24) npx @snowseo/beacon-server
-# [beacon] listening on http://0.0.0.0:8787/v3/beacon/hits (1 key(s), ip mode: hash)
+# [beacon] listening on http://0.0.0.0:8787/beacon/hits (1 key(s), ip mode: hash)
 ```
 
 Then configure the client with that origin and key:
@@ -106,7 +106,7 @@ define('SNOWSEO_BEACON_ENDPOINT', 'https://beacon.example.com');
 define('SNOWSEO_BEACON_KEY', 'the key you generated');
 ```
 
-Two routes, no more: `POST /v3/beacon/hits` and `GET /health`. Dashboards, stats
+Two routes, no more: `POST /beacon/hits` and `GET /health`. Dashboards, stats
 APIs and attribution are not part of it - the server records classified,
 verified hits, and what you do with them is yours. The full wire contract is in
 [PROTOCOL.md](https://github.com/Snow-SEO/beacon/blob/main/packages/beacon-server/PROTOCOL.md).

@@ -10,7 +10,7 @@
 		"type-check": "astro check"
 	},
 	"dependencies": {
-		"@snowseo/beacon": "^0.1.1",
+		"@snowseo/beacon": "^0.1.2",
 		"astro": "^5.13.0"
 	},
 	"devDependencies": {

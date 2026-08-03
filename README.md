@@ -46,7 +46,7 @@ like:
 
 ```bash
 BEACON_KEYS=$(openssl rand -hex 24) npx @snowseo/beacon-server
-# [beacon] listening on http://0.0.0.0:8787/v3/beacon/hits
+# [beacon] listening on http://0.0.0.0:8787/beacon/hits
 ```
 
 ```ts
@@ -57,7 +57,7 @@ createBeacon({
 });
 ```
 
-Two routes, no more: `POST /v3/beacon/hits` and `GET /health`. It classifies and
+Two routes, no more: `POST /beacon/hits` and `GET /health`. It classifies and
 verifies exactly as the hosted service does - the same `ingestBatch` function
 runs in both - and stores to SQLite or Postgres.
 

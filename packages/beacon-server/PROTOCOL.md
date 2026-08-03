@@ -18,8 +18,8 @@ Content-Type: application/json
 ```
 
 `<endpoint>` is whatever the client is configured with. If it is a bare origin,
-clients append `/v3/beacon/hits`, so `https://beacon.example.com` and
-`https://beacon.example.com/v3/beacon/hits` are equivalent.
+clients append `/beacon/hits`, so `https://beacon.example.com` and
+`https://beacon.example.com/beacon/hits` are equivalent.
 
 Requests are server-to-server. Nothing about beacon runs in a visitor's browser,
 and no cookie or visitor identifier is ever involved.

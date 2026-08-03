@@ -317,12 +317,18 @@ Never expose that key to the browser. It authenticates writes for your whole sit
 Next it must **not** carry a `VITE_` or `NEXT_PUBLIC_` prefix - those are inlined into the client bundle,
 which publishes the key.
 
-`endpoint` may be a bare origin; the ingest path is appended for you. Both of these are the same thing:
+For hosted SnowSEO, omit `endpoint` entirely - the default already points at it.
+
+Set it to reach your own collector. It may be a bare origin, in which case the
+ingest path is appended for you, so both of these are the same thing:
 
 ```ts
-endpoint: "https://api.snowseo.com"
-endpoint: "https://api.snowseo.com/v3/beacon/hits"
+endpoint: "https://beacon.example.com"
+endpoint: "https://beacon.example.com/beacon/hits"
 ```
+
+An `endpoint` that already names a path is left exactly as written, which is how
+you point at a route of your own.
 
 You keep control of this half:
 

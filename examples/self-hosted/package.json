@@ -12,8 +12,8 @@
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@snowseo/beacon": "^0.1.1",
-		"@snowseo/beacon-server": "^0.1.1",
+		"@snowseo/beacon": "^0.1.2",
+		"@snowseo/beacon-server": "^0.1.2",
 		"express": "^5.1.0"
 	},
 	"devDependencies": {

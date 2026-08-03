@@ -4,9 +4,9 @@ import {
 	classifyAICrawler,
 } from "./crawlers.js";
 
-export const INGEST_PATH = "/v3/beacon/hits";
+export const INGEST_PATH = "/beacon/hits";
 
-export const DEFAULT_INGEST_ENDPOINT = `https://api.snowseo.com${INGEST_PATH}`;
+export const DEFAULT_INGEST_ENDPOINT = "https://api.snowseo.com/v3/beacon/hits";
 
 const DEFAULT_BATCH_SIZE = 25;
 

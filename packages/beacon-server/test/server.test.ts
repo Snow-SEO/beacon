@@ -78,7 +78,7 @@ describe("GET /health", () => {
 		assert.deepEqual(await res.json(), { status: "ok" });
 	});
 });
-describe("POST /v3/beacon/hits", () => {
+describe("POST /beacon/hits", () => {
 	it("accepts a batch and stores the classified hits", async () => {
 		const res = await post({
 			host: "example.com",

@@ -1,6 +1,6 @@
 export const BEACON_KEY_HEADER = "x-beacon-key";
 
-export const BEACON_INGEST_PATH = "/v3/beacon/hits";
+export const BEACON_INGEST_PATH = "/beacon/hits";
 
 export const MAX_HITS_PER_REQUEST = 500;
 

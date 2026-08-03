@@ -123,7 +123,7 @@ describe("ingestBatch", () => {
 	});
 	it("rolls a batch up per day and agent", async () => {
 		seedOpenAi();
-		const at = "2026-07-30T10:00:00.000Z";
+		const at = new Date(Date.now() - 60_000).toISOString();
 		const result = await ingestBatch("example.com", [
 			{
 				path: "/a",
@@ -149,7 +149,7 @@ describe("ingestBatch", () => {
 		]);
 		assert.equal(result.rollups.length, 1);
 		const [rollup] = result.rollups;
-		assert.equal(rollup.date, "2026-07-30");
+		assert.equal(rollup.date, at.slice(0, 10));
 		assert.equal(rollup.hits, 3);
 		assert.equal(rollup.htmlHits, 2);
 		assert.equal(rollup.markdownHits, 1);

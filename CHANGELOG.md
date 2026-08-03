@@ -2,6 +2,34 @@
 
 Both packages are released together and share a version.
 
+## 0.1.2
+
+### Changed
+
+- **The ingest route is now `/beacon/hits`**, dropping a version prefix it had
+  inherited from the SnowSEO API it was extracted from.
+
+  Client and server move together - both packages share a version. An `endpoint`
+  set to a bare origin needs no edit, since the path is filled in by
+  [`normalizeIngestEndpoint`](./packages/beacon/src/analytics.ts); only one
+  written out in full does. A server can keep serving the old route with
+  `ingestPath`.
+
+  Reporting to hosted SnowSEO is unaffected: `DEFAULT_INGEST_ENDPOINT` is a
+  literal now rather than derived from `INGEST_PATH`, so the two can differ.
+  Setting `endpoint` to a bare origin no longer reaches hosted SnowSEO - omit
+  `endpoint` entirely instead.
+
+### Fixed
+
+- **A rollup test failed permanently after 2026-07-31.** It pinned `occurredAt`
+  to a literal `2026-07-30T10:00:00.000Z` and asserted the rollup landed in that
+  day's bucket, so once real time drifted more than 24 hours past it the
+  clock-skew rule in `parseOccurredAt` did exactly what the protocol requires -
+  substituted the receive time - and the assertion broke. The timestamp is now
+  derived from the current clock.
+  ([`ingest.test.ts`](./packages/beacon-server/test/ingest.test.ts))
+
 ## 0.1.1
 
 Two bugs, both found by writing the [examples](./examples) rather than by the

@@ -76,7 +76,7 @@ That address is in OpenAI's published range, so the row comes back `verified` by
 
 ```
 site (:3000)                         collector (:8787)
-  beaconExpress(beacon)                POST /v3/beacon/hits
+  beaconExpress(beacon)                POST /beacon/hits
     serves site/*.md                     classify user agent
     advertises Link: rel=alternate       verify IP against provider ranges
     reports hits ─────────────────────►  check Web Bot Auth signature

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BeaconAnalytics, normalizeIngestEndpoint } from "../src/analytics.js";
+import {
+	BeaconAnalytics,
+	DEFAULT_INGEST_ENDPOINT,
+	INGEST_PATH,
+	normalizeIngestEndpoint,
+} from "../src/analytics.js";
 
 const KEY = "sb_live_team_abc";
 
@@ -33,21 +38,34 @@ function stubFetch(status = 200) {
 	}) as unknown as typeof fetch;
 	return { calls, fetchImpl };
 }
+describe("ingest paths", () => {
+	it("keeps the hosted endpoint independent of the self-hosted route", () => {
+		assert.equal(INGEST_PATH, "/beacon/hits");
+		assert.equal(
+			DEFAULT_INGEST_ENDPOINT,
+			"https://api.snowseo.com/v3/beacon/hits",
+		);
+		assert.notEqual(
+			DEFAULT_INGEST_ENDPOINT,
+			`https://api.snowseo.com${INGEST_PATH}`,
+		);
+	});
+});
 describe("normalizeIngestEndpoint", () => {
 	it("appends the ingest path to a bare origin", () => {
 		assert.equal(
 			normalizeIngestEndpoint("https://api.example.com"),
-			"https://api.example.com/v3/beacon/hits",
+			"https://api.example.com/beacon/hits",
 		);
 		assert.equal(
 			normalizeIngestEndpoint("https://box.tail1234.ts.net:8443/"),
-			"https://box.tail1234.ts.net:8443/v3/beacon/hits",
+			"https://box.tail1234.ts.net:8443/beacon/hits",
 		);
 	});
 	it("leaves an endpoint that already names a path alone", () => {
 		assert.equal(
-			normalizeIngestEndpoint("https://api.example.com/v3/beacon/hits"),
-			"https://api.example.com/v3/beacon/hits",
+			normalizeIngestEndpoint("https://api.example.com/beacon/hits"),
+			"https://api.example.com/beacon/hits",
 		);
 		assert.equal(
 			normalizeIngestEndpoint("https://api.example.com/custom/ingest"),
