@@ -79,6 +79,12 @@ Verification uses three signals, weakest to strongest:
 - **Web Bot Auth.** An RFC 9421 signature. The only one that is proof rather
   than inference.
 
+None of that is a service you call. The agents it matches are a plain list in
+[`crawlers.ts`](packages/beacon/src/crawlers.ts), and the range feeds are URLs in
+[`crawler-ranges.ts`](packages/beacon-server/src/crawler-ranges.ts) that your own
+server fetches straight from the provider. Read them, and send a PR to add one -
+[CONTRIBUTING.md](CONTRIBUTING.md) says what an entry needs.
+
 Results land in four states - `signed`, `verified`, `unverified`,
 `spoofed_suspected`. `unverified` means there was nothing to check against;
 `spoofed_suspected` means something checkable contradicts the claim. Keeping
@@ -96,10 +102,9 @@ running the suites - including the real Apache end-to-end run.
 
 ## Hosted SnowSEO
 
-[SnowSEO](https://snowseo.com) runs this same code and adds the parts that are
-not in this repository: a dashboard, a maintained verified-crawler dataset,
-attribution from crawl to citation, and history. Using it is optional - beacon
-works completely without it.
+[SnowSEO](https://snowseo.com) runs this same code and adds what is not in this
+repository: a dashboard, attribution from crawl to citation, and history beyond
+what your own database holds. Using it is optional - beacon works completely without it.
 
 ## License
 
