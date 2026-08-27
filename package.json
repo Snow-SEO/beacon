@@ -13,6 +13,7 @@
 	},
 	"scripts": {
 		"build": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server build",
+		"prepare": "pnpm run build",
 		"check": "biome check .",
 		"check:write": "biome check --write .",
 		"type-check": "pnpm --filter @snowseo/beacon --filter @snowseo/beacon-server type-check",

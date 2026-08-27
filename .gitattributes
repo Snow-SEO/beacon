@@ -1,0 +1,2 @@
+# Normalize line endings to LF so Windows copy/paste doesn't mark every file modified.
+* text=auto eol=lf

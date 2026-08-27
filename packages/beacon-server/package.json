@@ -1,6 +1,6 @@
 {
 	"name": "@snowseo/beacon-server",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Server side of the beacon protocol: AI crawler verification (provider IP ranges, datacenter detection, reverse DNS, Web Bot Auth) plus a reference ingest server.",
 	"keywords": [
 		"ai",
@@ -61,8 +61,7 @@
 		"start": "node dist/bin/beacon-server.js",
 		"type-check": "tsc --noEmit",
 		"test": "node --import tsx/esm --test test/**/*.test.ts",
-		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test",
-		"prepare": "pnpm run build"
+		"prepublishOnly": "pnpm run type-check && pnpm run build && pnpm run test"
 	},
 	"dependencies": {
 		"@snowseo/beacon": "workspace:^"

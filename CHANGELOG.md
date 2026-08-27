@@ -2,6 +2,34 @@
 
 Both packages are released together and share a version.
 
+## 0.1.3
+
+### Fixed
+
+- **`@snowseo/beacon-server@0.1.2` could not be installed by anyone.** It went
+  to npm declaring `"@snowseo/beacon": "workspace:^"` - the pnpm workspace
+  protocol, published verbatim instead of being rewritten to a real range. npm
+  answers `EUNSUPPORTEDPROTOCOL` and pnpm answers
+  `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. Upgrade straight to 0.1.3; there is no
+  workaround for 0.1.2.
+
+  `pnpm publish` performs that rewrite and `npm publish` does not, which is the
+  only thing that differed - 0.1.0 and 0.1.1 shipped correct ranges. Publishing
+  now runs from `.github/workflows/release.yml` so the command is not a choice.
+
+### Changed
+
+- **Releases are published from CI with npm provenance.** Tarballs are now
+  signed against the commit and workflow that produced them, which a local
+  publish cannot do: `--provenance` needs an OIDC token only a CI provider can
+  mint.
+
+- **Neither package ships an install script any more.** `prepare` existed to
+  build the workspace on a fresh clone so the `beacon` bin could be linked, but
+  it was published too, where it only ever fired on git-URL installs and failed
+  for want of pnpm and tsup. It now lives in the private root manifest, so a
+  fresh `pnpm install` still builds and links exactly as before.
+
 ## 0.1.2
 
 ### Changed
