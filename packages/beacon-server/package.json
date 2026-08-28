@@ -1,6 +1,6 @@
 {
 	"name": "@snowseo/beacon-server",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Server side of the beacon protocol: AI crawler verification (provider IP ranges, datacenter detection, reverse DNS, Web Bot Auth) plus a reference ingest server.",
 	"keywords": [
 		"ai",
