@@ -944,3 +944,71 @@ describe("createFetchResolver", () => {
 		assert.equal(calls, 2);
 	});
 });
+
+describe("fetch resolver frontmatter", () => {
+	function htmlPage(body: string) {
+		return async () =>
+			new Response(body, {
+				status: 200,
+				headers: { "content-type": "text/html; charset=utf-8" },
+			});
+	}
+
+	it("leads with title, description and url", async () => {
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: htmlPage(
+				`<html><head><title>Pricing</title>
+				<meta name="description" content="What it costs."></head>
+				<body><main><h1>Pricing</h1></main></body></html>`,
+			),
+		});
+		const md = String(
+			await resolve("/pricing", new Request("https://e.com/pricing.md")),
+		);
+		assert.ok(md.startsWith("---\n"));
+		assert.match(md, /title: "Pricing"/);
+		assert.match(md, /description: "What it costs\."/);
+		assert.match(md, /url: "https:\/\/e\.com\/pricing"/);
+		assert.match(md, /# Pricing/);
+	});
+
+	it("quotes values so a colon in a title cannot break the YAML", async () => {
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: htmlPage(
+				`<html><head><title>Pricing: plans and limits</title></head>
+				<body><main><p>Body.</p></main></body></html>`,
+			),
+		});
+		const md = String(await resolve("/p", new Request("https://e.com/p.md")));
+		assert.match(md, /title: "Pricing: plans and limits"/);
+	});
+
+	it("can be turned off", async () => {
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			frontmatter: false,
+			fetch: htmlPage(
+				`<html><head><title>Pricing</title></head><body><main><p>Body.</p></main></body></html>`,
+			),
+		});
+		const md = String(await resolve("/p", new Request("https://e.com/p.md")));
+		assert.ok(!md.startsWith("---"));
+	});
+
+	it("does not mint a twin for a page with no body content", async () => {
+		// Frontmatter is never empty, so counting it would turn every blank page
+		// into a twin that says nothing.
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: htmlPage(
+				`<html><head><title>Empty</title></head><body><main></main></body></html>`,
+			),
+		});
+		assert.equal(
+			await resolve("/empty", new Request("https://e.com/empty.md")),
+			null,
+		);
+	});
+});

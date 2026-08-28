@@ -15,6 +15,89 @@ const VOID_CONTENT_TAGS = new Set([
 	"form",
 ]);
 
+const CHROME_TAGS = new Set(["nav", "aside", "dialog"]);
+
+const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
+function chromeHeaderTokens(tokens: Token[]): Set<number> {
+	const drop = new Set<number>();
+	for (const [i, token] of tokens.entries()) {
+		if (token.kind !== "open" || token.tag !== "header" || token.selfClosing) {
+			continue;
+		}
+		let depth = 1;
+		let hasHeading = false;
+		for (let j = i + 1; j < tokens.length; j += 1) {
+			const inner = tokens[j];
+			if (!inner) {
+				break;
+			}
+			if (
+				inner.kind === "open" &&
+				inner.tag === "header" &&
+				!inner.selfClosing
+			) {
+				depth += 1;
+			} else if (inner.kind === "close" && inner.tag === "header") {
+				depth -= 1;
+				if (depth === 0) {
+					break;
+				}
+			}
+			if (inner.kind === "open" && HEADING_TAGS.has(inner.tag)) {
+				hasHeading = true;
+				break;
+			}
+		}
+		if (!hasHeading) {
+			drop.add(i);
+		}
+	}
+	return drop;
+}
+
+const BOILERPLATE_RE =
+	/(?:^|[\s_-])(?:cookie|consent|gdpr|banner|breadcrumbs?|navbar|navigation|sidebar|site-?header|site-?footer|masthead|newsletter|subscribe|popup|modal|overlay|backdrop|advert|advertisement|sponsored|social-?share|share-?buttons?|skip-?link|sr-only|visually-?hidden|screen-?reader)(?:[\s_-]|$)/i;
+
+const HIDDEN_STYLE_RE = /(?:display\s*:\s*none|visibility\s*:\s*hidden)/i;
+
+const GENERIC_ALT_RE =
+	/^(?:brand[\s_-]*)?(?:logo|icon|image|img|photo|picture|graphic|illustration|avatar|thumbnail|banner)[\s_-]*\d*$/i;
+
+function isDecorativeImage(attrs: Record<string, string>): boolean {
+	if ("alt" in attrs && attrs.alt?.trim() === "") {
+		return true;
+	}
+	if (attrs.role === "presentation" || attrs.role === "none") {
+		return true;
+	}
+	const alt = attrs.alt?.trim();
+	return Boolean(alt && GENERIC_ALT_RE.test(alt));
+}
+
+function shouldDropElement(
+	tag: string,
+	attrs: Record<string, string>,
+	insideArticle: boolean,
+): boolean {
+	if (!insideArticle && CHROME_TAGS.has(tag)) {
+		return true;
+	}
+	if ("hidden" in attrs || attrs["aria-hidden"] === "true") {
+		return true;
+	}
+	const style = attrs.style;
+	if (style && HIDDEN_STYLE_RE.test(style)) {
+		return true;
+	}
+	const className = attrs.class;
+	if (className && BOILERPLATE_RE.test(className)) {
+		return true;
+	}
+	const id = attrs.id;
+	return Boolean(id && BOILERPLATE_RE.test(id));
+}
+
 const VOID_TAGS = new Set([
 	"area",
 	"base",
@@ -140,8 +223,12 @@ interface Token {
 const TAG_RE =
 	/<(\/)?([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/)?>/g;
 
+// The value is optional so boolean attributes (`hidden`, `open`, `disabled`)
+// are recorded at all. Requiring `=` meant `<div hidden>` parsed to no
+// attributes, so nothing could act on it. Safe because TAG_RE hands this the
+// attribute run only, never the tag name.
 const ATTR_RE =
-	/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+	/([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
 const COMMENT_RE = /<!--[\s\S]*?-->/g;
 
@@ -270,14 +357,35 @@ const CONTAINERS: readonly {
 	{ tag: "main", re: MAIN_OPEN_RE },
 ];
 
-function extractContainer(html: string): string {
+const ARTICLE_COUNT_RE = /<article[^>]*>/gi;
+
+const FOOTER_BLOCK_RE = /<footer[^>]*>[\s\S]*?<\/footer>/i;
+
+function withPageFooter(slice: string, full: string): string {
+	if (/<footer[\s>]/i.test(slice)) {
+		return slice;
+	}
+	const found = FOOTER_BLOCK_RE.exec(full);
+	return found ? `${slice}\n${found[0]}` : slice;
+}
+
+interface Container {
+	html: string;
+	tag: string | null;
+}
+
+function extractContainer(html: string): Container {
+	const articleCount = (html.match(ARTICLE_COUNT_RE) ?? []).length;
 	for (const { tag, re } of CONTAINERS) {
+		if (tag === "article" && articleCount !== 1) {
+			continue;
+		}
 		const open = re.exec(html);
 		if (open) {
 			const start = open.index + open[0].length;
 			const close = html.toLowerCase().lastIndexOf(`</${tag}>`);
 			if (close > start) {
-				return html.slice(start, close);
+				return { html: withPageFooter(html.slice(start, close), html), tag };
 			}
 		}
 	}
@@ -288,16 +396,22 @@ function extractContainer(html: string): string {
 			.toLowerCase()
 			.lastIndexOf(`</${roleMain[1].toLowerCase()}>`);
 		if (close > start) {
-			return html.slice(start, close);
+			return {
+				html: withPageFooter(html.slice(start, close), html),
+				tag: roleMain[1].toLowerCase(),
+			};
 		}
 	}
 	const body = BODY_OPEN_RE.exec(html);
 	if (body) {
 		const start = body.index + body[0].length;
 		const close = html.toLowerCase().lastIndexOf("</body>");
-		return close > start ? html.slice(start, close) : html.slice(start);
+		return {
+			html: close > start ? html.slice(start, close) : html.slice(start),
+			tag: "body",
+		};
 	}
-	return html;
+	return { html, tag: null };
 }
 
 function resolveUrl(url: string, baseUrl?: string): string {
@@ -325,14 +439,19 @@ export function htmlToMarkdown(
 	let source = stripEmptyInline(
 		html.replace(COMMENT_RE, "").replace(DOCTYPE_RE, ""),
 	);
+	let containerTag: string | null = null;
 	if (options.extractMain !== false) {
-		source = extractContainer(source);
+		const container = extractContainer(source);
+		source = container.html;
+		containerTag = container.tag;
 	}
 	const tokens = tokenize(source);
+	const chromeHeaders = chromeHeaderTokens(tokens);
 	const out: string[] = [];
 	const lists: ListFrame[] = [];
 	let skipDepth = 0;
 	let skipTag = "";
+	let articleDepth = containerTag === "article" ? 1 : 0;
 	let preDepth = 0;
 	let preFenceIndex = -1;
 	let pendingTitle: string | null = null;
@@ -387,7 +506,7 @@ export function htmlToMarkdown(
 		}
 		return frame.ordered ? `${indent}${frame.index}. ` : `${indent}- `;
 	};
-	for (const token of tokens) {
+	for (const [index, token] of tokens.entries()) {
 		if (skipDepth > 0) {
 			if (
 				token.kind === "open" &&
@@ -413,7 +532,19 @@ export function htmlToMarkdown(
 			continue;
 		}
 		const { tag, attrs } = token;
-		if (token.kind === "open" && VOID_CONTENT_TAGS.has(tag)) {
+		if (tag === "article") {
+			if (token.kind === "open" && !token.selfClosing) {
+				articleDepth += 1;
+			} else if (token.kind === "close" && articleDepth > 0) {
+				articleDepth -= 1;
+			}
+		}
+		if (
+			token.kind === "open" &&
+			(VOID_CONTENT_TAGS.has(tag) ||
+				chromeHeaders.has(index) ||
+				shouldDropElement(tag, attrs, articleDepth > 0))
+		) {
 			if (!token.selfClosing) {
 				skipDepth = 1;
 				skipTag = tag;
@@ -456,7 +587,7 @@ export function htmlToMarkdown(
 					break;
 				case "img": {
 					const src = resolveUrl(attrs.src ?? "", options.baseUrl);
-					if (src && !src.startsWith("data:")) {
+					if (src && !src.startsWith("data:") && !isDecorativeImage(attrs)) {
 						write(`![${attrs.alt ?? ""}](${src})`);
 					}
 					break;
@@ -719,11 +850,29 @@ export function htmlToMarkdown(
 		}
 	}
 	flushLine();
-	return out
+	return dedupeMediaLines(out)
 		.join("\n")
 		.replace(/[ \t]+$/gm, "")
 		.replace(/\n{3,}/g, "\n\n")
 		.trim();
+}
+
+const MEDIA_ONLY_LINE_RE = /^!?\[[^\]]*\]\([^)]+\)$/;
+
+function dedupeMediaLines(lines: string[]): string[] {
+	const out: string[] = [];
+	let previous: string | null = null;
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed && trimmed === previous && MEDIA_ONLY_LINE_RE.test(trimmed)) {
+			continue;
+		}
+		out.push(line);
+		if (trimmed) {
+			previous = trimmed;
+		}
+	}
+	return out;
 }
 
 export function extractMetadata(html: string): {

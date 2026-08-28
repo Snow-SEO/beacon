@@ -297,3 +297,195 @@ describe("nested tables", () => {
 		);
 	});
 });
+
+describe("chrome removal", () => {
+	it("drops a site header nested inside main", () => {
+		// The shape that started this: snowseo.com renders its fixed header
+		// inside <main>, so extracting the container alone kept the whole nav.
+		const md = htmlToMarkdown(
+			`<body><main>
+				<header><nav><a href="/pricing">Pricing</a></nav></header>
+				<h1>Investment that pays for itself</h1>
+			</main></body>`,
+		);
+		assert.ok(!md.includes("Pricing"));
+		assert.ok(md.includes("# Investment that pays for itself"));
+	});
+	it("keeps header, footer and nav inside an article", () => {
+		// An article's own header is its title and byline; its nav is a table of
+		// contents. Those are the content, not furniture around it.
+		const md = htmlToMarkdown(
+			`<body><main><article>
+				<header><h1>Real Title</h1></header>
+				<nav><a href="#one">Section one</a></nav>
+				<p>Body.</p>
+				<footer>By Ada Lovelace</footer>
+			</article></main></body>`,
+		);
+		assert.ok(md.includes("Real Title"));
+		assert.ok(md.includes("Section one"));
+		assert.ok(md.includes("Ada Lovelace"));
+	});
+	it("drops cookie banners and modals by class", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<div class="cookie-banner">We use cookies</div>
+				<div id="newsletter-signup">Subscribe now</div>
+				<p>Actual content.</p>
+			</main></body>`,
+		);
+		assert.ok(!md.includes("We use cookies"));
+		assert.ok(!md.includes("Subscribe now"));
+		assert.equal(md.trim(), "Actual content.");
+	});
+	it("does not mistake a content word for boilerplate", () => {
+		// Word boundaries matter: "sharepoint" and "bannerman" are not banners.
+		const md = htmlToMarkdown(
+			`<body><main>
+				<div class="sharepoint-guide"><p>Kept one.</p></div>
+				<div class="bannerman"><p>Kept two.</p></div>
+			</main></body>`,
+		);
+		assert.ok(md.includes("Kept one."));
+		assert.ok(md.includes("Kept two."));
+	});
+	it("drops content hidden from the rendered page", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<div hidden><p>Hidden attribute.</p></div>
+				<div aria-hidden="true"><p>Aria hidden.</p></div>
+				<div style="display:none"><p>Styled away.</p></div>
+				<span class="sr-only">Skip to content</span>
+				<p>Visible.</p>
+			</main></body>`,
+		);
+		assert.ok(!md.includes("Hidden attribute."));
+		assert.ok(!md.includes("Aria hidden."));
+		assert.ok(!md.includes("Styled away."));
+		assert.ok(!md.includes("Skip to content"));
+		assert.ok(md.includes("Visible."));
+	});
+});
+describe("container selection", () => {
+	it("prefers the single article over main", () => {
+		const md = htmlToMarkdown(
+			`<body><main><p>Chrome.</p><article><p>The post.</p></article></main></body>`,
+		);
+		assert.equal(md.trim(), "The post.");
+	});
+	it("falls back to main when a listing has many articles", () => {
+		// Taking the first <article> here would reduce the page to one card.
+		const md = htmlToMarkdown(
+			`<body><main>
+				<article><h2>First</h2></article>
+				<article><h2>Second</h2></article>
+			</main></body>`,
+		);
+		assert.ok(md.includes("First"));
+		assert.ok(md.includes("Second"));
+	});
+});
+
+describe("decorative images", () => {
+	it("drops images the page marks as decorative", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<img src="/spacer.png" alt="">
+				<img src="/deco.png" role="presentation" alt="swirl">
+				<img src="/real.png" alt="Revenue grew 40% in Q3">
+			</main></body>`,
+		);
+		assert.ok(!md.includes("spacer.png"));
+		assert.ok(!md.includes("deco.png"));
+		assert.ok(md.includes("Revenue grew 40% in Q3"));
+	});
+	it("drops logos whose alt only names the kind of image", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<img src="/l1.svg" alt="Brand logo 1">
+				<img src="/l2.svg" alt="logo">
+				<img src="/chart.svg" alt="Logo redesign process explained">
+			</main></body>`,
+		);
+		assert.ok(!md.includes("l1.svg"));
+		assert.ok(!md.includes("l2.svg"));
+		// Alt that merely starts with "logo" is still a sentence, so it stays.
+		assert.ok(md.includes("chart.svg"));
+	});
+	it("keeps an image with no alt attribute at all", () => {
+		// Ambiguous rather than decorative: many CMSs just omit it.
+		const md = htmlToMarkdown(`<body><main><img src="/x.png"></main></body>`);
+		assert.ok(md.includes("x.png"));
+	});
+});
+describe("repeated media", () => {
+	it("collapses a link repeated back to back", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<p><a href="/signup">Sign up</a></p>
+				<p><a href="/signup">Sign up</a></p>
+				<p>Between.</p>
+				<p><a href="/signup">Sign up</a></p>
+			</main></body>`,
+		);
+		// Two adjacent copies collapse; the one after other content survives.
+		assert.equal(md.split("[Sign up](/signup)").length - 1, 2);
+	});
+	it("does not collapse repeated prose", () => {
+		const md = htmlToMarkdown(
+			`<body><main><p>Yes.</p><p>Yes.</p></main></body>`,
+		);
+		assert.equal(md.split("Yes.").length - 1, 2);
+	});
+});
+
+describe("footers", () => {
+	it("keeps a footer, which carries entity facts found nowhere else", () => {
+		const md = htmlToMarkdown(
+			`<body><main><p>Body.</p></main>
+			<footer><p>Acme Ltd, 1 Main Street, London. hello@acme.com</p></footer>
+			</body>`,
+		);
+		assert.ok(md.includes("Acme Ltd"));
+		assert.ok(md.includes("hello@acme.com"));
+	});
+	it("still drops a sitemap-style link farm inside that footer", () => {
+		const md = htmlToMarkdown(
+			`<body><main><p>Body.</p></main>
+			<footer>
+				<nav><a href="/a">Product</a><a href="/b">Careers</a></nav>
+				<p>Acme Ltd, 1 Main Street</p>
+			</footer></body>`,
+		);
+		assert.ok(!md.includes("Careers"));
+		assert.ok(md.includes("Acme Ltd"));
+	});
+});
+
+describe("headers", () => {
+	it("keeps a page header that holds the title", () => {
+		// The failure this guards: a page introducing itself inside <header> would
+		// lose its h1 and standfirst if header were dropped by tag alone.
+		const md = htmlToMarkdown(
+			`<body><main>
+				<header>
+					<h1>Investment that pays for itself</h1>
+					<p>Our customers save five hours a day.</p>
+				</header>
+				<p>Body.</p>
+			</main></body>`,
+		);
+		assert.ok(md.includes("# Investment that pays for itself"));
+		assert.ok(md.includes("Our customers save five hours a day."));
+	});
+	it("drops a site header that is only a logo and links", () => {
+		const md = htmlToMarkdown(
+			`<body><main>
+				<header><a href="/">Acme</a><a href="/pricing">Pricing</a></header>
+				<h1>Real Title</h1>
+			</main></body>`,
+		);
+		assert.ok(!md.includes("Pricing"));
+		assert.ok(md.includes("# Real Title"));
+	});
+});

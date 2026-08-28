@@ -1,5 +1,5 @@
 import type { MarkdownResolver } from "./beacon.js";
-import { htmlToMarkdown } from "./convert.js";
+import { extractMetadata, htmlToMarkdown } from "./convert.js";
 
 export const TWIN_FETCH_HEADER = "x-beacon-twin";
 
@@ -14,6 +14,14 @@ export interface FetchResolverOptions {
 	maxEntries?: number;
 	timeoutMs?: number;
 	fetch?: typeof fetch;
+	frontmatter?: boolean;
+}
+
+function buildFrontmatter(fields: Record<string, string | null>): string {
+	const lines = Object.entries(fields)
+		.filter(([, value]) => value?.trim())
+		.map(([key, value]) => `${key}: ${JSON.stringify(value?.trim())}`);
+	return lines.length > 0 ? `---\n${lines.join("\n")}\n---\n\n` : "";
 }
 
 interface Entry {
@@ -38,6 +46,7 @@ export function createFetchResolver(
 		maxEntries = DEFAULT_MAX_ENTRIES,
 		timeoutMs = DEFAULT_TIMEOUT_MS,
 		fetch: fetchImpl = globalThis.fetch,
+		frontmatter: withFrontmatter = true,
 	} = options;
 
 	const cache = new Map<string, Entry>();
@@ -78,11 +87,23 @@ export function createFetchResolver(
 			if (!type.includes("html")) {
 				return remember(path, null);
 			}
-			const markdown = htmlToMarkdown(await response.text(), {
-				extractMain,
-				baseUrl: siteUrl,
+			const html = await response.text();
+			const body = htmlToMarkdown(html, { extractMain, baseUrl: siteUrl });
+			// Emptiness is judged on the body alone. Frontmatter is never empty,
+			// so counting it would mint a twin for a page with no content at all.
+			if (!body.trim()) {
+				return remember(path, null);
+			}
+			if (!withFrontmatter) {
+				return remember(path, body);
+			}
+			const meta = extractMetadata(html);
+			const head = buildFrontmatter({
+				title: meta.title,
+				description: meta.description,
+				url: new URL(path, siteUrl).toString(),
 			});
-			return remember(path, markdown.trim() ? markdown : null);
+			return remember(path, `${head}${body}`);
 		} catch {
 			// Uncached: a blip must not suppress the twin for a whole TTL.
 			return null;
