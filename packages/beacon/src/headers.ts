@@ -9,7 +9,7 @@ export const DEFAULT_CONTENT_SIGNAL = "ai-train=yes, search=yes, ai-input=yes";
 const DEFAULT_CACHE_CONTROL = "public, max-age=3600";
 
 export interface MarkdownResponseOptions {
-	canonicalUrl?: string;
+	htmlUrl?: string;
 	originalTokens?: number;
 	cacheControl?: string;
 	contentSignal?: string;
@@ -31,7 +31,7 @@ export function buildMarkdownHeaders(
 		headers.set("X-Original-Tokens", String(options.originalTokens));
 	}
 	if (!headers.has("X-Robots-Tag")) {
-		headers.set("X-Robots-Tag", "index, follow");
+		headers.set("X-Robots-Tag", "noindex, follow");
 	}
 	if (!headers.has("Cache-Control")) {
 		headers.set("Cache-Control", options.cacheControl ?? DEFAULT_CACHE_CONTROL);
@@ -42,12 +42,12 @@ export function buildMarkdownHeaders(
 			options.contentSignal ?? DEFAULT_CONTENT_SIGNAL,
 		);
 	}
-	if (options.canonicalUrl) {
+	if (options.htmlUrl) {
 		headers.set(
 			"Link",
 			appendLink(
 				headers.get("Link"),
-				`<${options.canonicalUrl}>; rel="canonical"`,
+				`<${options.htmlUrl}>; rel="alternate"; type="text/html"`,
 			),
 		);
 	}

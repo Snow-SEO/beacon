@@ -41,6 +41,13 @@ export {
 export { createDirResolver, type DirResolverOptions } from "./dir-resolver.js";
 
 export {
+	createFetchResolver,
+	type FetchResolverOptions,
+	isTwinFetch,
+	TWIN_FETCH_HEADER,
+} from "./fetch-resolver.js";
+
+export {
 	type GeneratedTwin,
 	type GenerateOptions,
 	type GenerateResult,

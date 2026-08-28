@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import { BeaconAnalytics } from "../src/analytics.js";
 import { createBeacon } from "../src/beacon.js";
 import { extractMetadata, htmlToMarkdown } from "../src/convert.js";
+import {
+	createFetchResolver,
+	TWIN_FETCH_HEADER,
+} from "../src/fetch-resolver.js";
 import { appendLink, markdownResponse, mergeVary } from "../src/headers.js";
 import { renderLlmsTxt } from "../src/llms-txt.js";
 import { negotiateFormat, parseAcceptHeader } from "../src/negotiate.js";
@@ -58,9 +62,9 @@ describe("negotiate", () => {
 	});
 });
 describe("headers", () => {
-	it("never sets noindex by default", () => {
+	it("holds the twin out of search by default", () => {
 		const res = markdownResponse("# Hi");
-		assert.equal(res.headers.get("x-robots-tag"), "index, follow");
+		assert.equal(res.headers.get("x-robots-tag"), "noindex, follow");
 	});
 	it("sets the markdown content type, vary and token count", () => {
 		const res = markdownResponse("# Hi there");
@@ -72,14 +76,14 @@ describe("headers", () => {
 		assert.ok(Number(res.headers.get("x-markdown-tokens")) > 0);
 		assert.equal(res.headers.get("x-content-type-options"), "nosniff");
 	});
-	it("emits canonical only when given one", () => {
+	it("emits the HTML back-link only when given one", () => {
 		assert.equal(markdownResponse("x").headers.get("link"), null);
 		const res = markdownResponse("x", {
-			canonicalUrl: "https://e.com/pricing",
+			htmlUrl: "https://e.com/pricing",
 		});
 		assert.equal(
 			res.headers.get("link"),
-			'<https://e.com/pricing>; rel="canonical"',
+			'<https://e.com/pricing>; rel="alternate"; type="text/html"',
 		);
 	});
 	it("lets an explicit override through", () => {
@@ -110,17 +114,17 @@ describe("Beacon.handle", () => {
 		siteUrl: "https://e.com",
 		resolve: (path) => (path === "/pricing" ? "# Pricing" : null),
 	});
-	it("serves the twin at the .md URL with a canonical link", async () => {
+	it("serves the twin at the .md URL with an HTML back-link", async () => {
 		const res = await beacon.handle(new Request("https://e.com/pricing.md"));
 		assert.ok(res);
 		assert.equal(await res.text(), "# Pricing");
 		assert.equal(
 			res.headers.get("link"),
-			'<https://e.com/pricing>; rel="canonical"',
+			'<https://e.com/pricing>; rel="alternate"; type="text/html"',
 		);
-		assert.equal(res.headers.get("x-robots-tag"), "index, follow");
+		assert.equal(res.headers.get("x-robots-tag"), "noindex, follow");
 	});
-	it("serves markdown on the canonical URL without a canonical link", async () => {
+	it("serves markdown on the canonical URL without a back-link", async () => {
 		const res = await beacon.handle(
 			new Request("https://e.com/pricing", {
 				headers: { accept: "text/markdown" },
@@ -291,6 +295,25 @@ describe("Beacon.handle", () => {
 			resolve: () => "   \n  ",
 		});
 		assert.equal(await empty.handle(new Request("https://e.com/x.md")), null);
+	});
+});
+describe("robots.txt directives", () => {
+	const beacon = createBeacon({
+		siteUrl: "https://e.com",
+		resolve: () => null,
+	});
+	it("builds the llms.txt hint as a comment, not a directive", () => {
+		// A comment asks nothing of a search engine, which is the point: it puts
+		// the index where an agent will find it without submitting anything.
+		const line = beacon.robotsLlmsDirective();
+		assert.equal(line, "# Markdown index: https://e.com/llms.txt");
+		assert.ok(line.startsWith("#"));
+	});
+	it("still builds a Sitemap line for anyone who opts into indexable twins", () => {
+		assert.equal(
+			beacon.robotsDirective(),
+			"Sitemap: https://e.com/sitemap-md.xml",
+		);
 	});
 });
 describe("sitemap", () => {
@@ -690,5 +713,234 @@ describe("analytics host derivation", () => {
 			)?.host,
 			"canonical.example.com",
 		);
+	});
+});
+
+describe("client ip resolution", () => {
+	function ipFor(
+		headers: Record<string, string>,
+		getIp?: (request: Request) => string | null | undefined,
+	): string | undefined {
+		const hits: { ip?: string }[] = [];
+		const beacon = createBeacon({
+			siteUrl: "https://e.com",
+			resolve: () => "# hi",
+			...(getIp ? { getIp } : {}),
+			analytics: {
+				key: "sb_dev_t_1",
+				onHit: (hit) => hits.push(hit),
+				endpoint: "https://collector.invalid/hits",
+			},
+		});
+		beacon.advertise(
+			new Request("https://e.com/pricing", {
+				headers: { "user-agent": "GPTBot/1.2", ...headers },
+			}),
+			new Response("<html></html>", { status: 200 }),
+		);
+		return hits[0]?.ip;
+	}
+
+	it("reads the CDN headers, including Fastly and Fly", () => {
+		assert.equal(ipFor({ "fastly-client-ip": "203.0.113.7" }), "203.0.113.7");
+		assert.equal(ipFor({ "fly-client-ip": "203.0.113.8" }), "203.0.113.8");
+	});
+
+	// x-forwarded-for is client-writable, so anything a CDN set itself wins.
+	it("prefers a CDN header over x-forwarded-for", () => {
+		assert.equal(
+			ipFor({
+				"x-forwarded-for": "198.51.100.1",
+				"cf-connecting-ip": "203.0.113.9",
+			}),
+			"203.0.113.9",
+		);
+	});
+
+	// Node hands out the mapped form on a dual-stack socket; only the bare v4
+	// address matches an IPv4 CIDR, so verification depends on this.
+	it("unwraps IPv4-mapped IPv6", () => {
+		assert.equal(ipFor({ "x-real-ip": "::ffff:203.0.113.5" }), "203.0.113.5");
+		assert.equal(
+			ipFor({ "x-forwarded-for": "::ffff:203.0.113.6, 198.51.100.2" }),
+			"203.0.113.6",
+		);
+	});
+
+	it("lets getIp override the header chain, and falls back when it declines", () => {
+		assert.equal(
+			ipFor({ "cf-connecting-ip": "198.51.100.3" }, () => "203.0.113.10"),
+			"203.0.113.10",
+		);
+		assert.equal(
+			ipFor({ "cf-connecting-ip": "198.51.100.4" }, () => undefined),
+			"198.51.100.4",
+		);
+	});
+
+	it("reports nothing rather than a wrong address", () => {
+		assert.equal(ipFor({}), undefined);
+		assert.equal(ipFor({ "x-forwarded-for": "  ,  " }), undefined);
+	});
+});
+
+describe("exists hook", () => {
+	function beaconWith(
+		exists: ((path: string) => boolean) | undefined,
+		onResolve: () => void,
+	) {
+		return createBeacon({
+			siteUrl: "https://e.com",
+			resolve: () => {
+				onResolve();
+				return "# hi";
+			},
+			...(exists ? { exists } : {}),
+		});
+	}
+
+	it("answers hasTwin without running the resolver", async () => {
+		let resolves = 0;
+		const beacon = beaconWith(
+			() => true,
+			() => {
+				resolves += 1;
+			},
+		);
+		assert.equal(
+			await beacon.hasTwin("/pricing", new Request("https://e.com/pricing")),
+			true,
+		);
+		assert.equal(resolves, 0);
+	});
+
+	it("falls back to the resolver when no exists is given", async () => {
+		let resolves = 0;
+		const beacon = beaconWith(undefined, () => {
+			resolves += 1;
+		});
+		assert.equal(
+			await beacon.hasTwin("/pricing", new Request("https://e.com/pricing")),
+			true,
+		);
+		assert.equal(resolves, 1);
+	});
+
+	it("suppresses the alternate link when exists says no", async () => {
+		let resolves = 0;
+		const beacon = beaconWith(
+			() => false,
+			() => {
+				resolves += 1;
+			},
+		);
+		const out = await beacon.advertiseIfPresent(
+			new Request("https://e.com/pricing"),
+			new Response("<html></html>", { status: 200 }),
+		);
+		assert.equal(out.headers.get("link"), null);
+		assert.equal(resolves, 0);
+	});
+});
+
+describe("createFetchResolver", () => {
+	function fetchStub(pages: Record<string, string>, seen: string[] = []) {
+		return async (input: URL | RequestInfo, init?: RequestInit) => {
+			const url = String(input);
+			seen.push(
+				String((init?.headers as Record<string, string>)?.[TWIN_FETCH_HEADER]),
+			);
+			const body = pages[new URL(url).pathname];
+			return body === undefined
+				? new Response("nope", { status: 404 })
+				: new Response(body, {
+						status: 200,
+						headers: { "content-type": "text/html; charset=utf-8" },
+					});
+		};
+	}
+
+	it("converts the rendered page and marks its own fetch", async () => {
+		const seen: string[] = [];
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: fetchStub({ "/pricing": "<main><h1>Pricing</h1></main>" }, seen),
+		});
+		const md = await resolve(
+			"/pricing",
+			new Request("https://e.com/pricing.md"),
+		);
+		assert.match(String(md), /# Pricing/);
+		assert.deepEqual(seen, ["1"]);
+	});
+
+	it("caches, so a second hit does not refetch", async () => {
+		const seen: string[] = [];
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: fetchStub({ "/a": "<main><h1>A</h1></main>" }, seen),
+		});
+		const req = new Request("https://e.com/a.md");
+		await resolve("/a", req);
+		await resolve("/a", req);
+		assert.equal(seen.length, 1);
+	});
+
+	it("returns null for a missing page and for a non-HTML response", async () => {
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: fetchStub({}),
+		});
+		assert.equal(
+			await resolve("/gone", new Request("https://e.com/gone.md")),
+			null,
+		);
+
+		const json = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: async () =>
+				new Response("{}", {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+		});
+		assert.equal(await json("/api", new Request("https://e.com/api.md")), null);
+	});
+
+	it("evicts oldest past maxEntries rather than growing forever", async () => {
+		const seen: string[] = [];
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			maxEntries: 2,
+			fetch: fetchStub(
+				{
+					"/a": "<main>A</main>",
+					"/b": "<main>B</main>",
+					"/c": "<main>C</main>",
+				},
+				seen,
+			),
+		});
+		const r = new Request("https://e.com/x.md");
+		await resolve("/a", r);
+		await resolve("/b", r);
+		await resolve("/c", r); // evicts /a
+		await resolve("/a", r); // must refetch
+		assert.equal(seen.length, 4);
+	});
+
+	it("does not cache a network failure", async () => {
+		let calls = 0;
+		const resolve = createFetchResolver({
+			siteUrl: "https://e.com",
+			fetch: async () => {
+				calls += 1;
+				throw new Error("boom");
+			},
+		});
+		const r = new Request("https://e.com/a.md");
+		assert.equal(await resolve("/a", r), null);
+		assert.equal(await resolve("/a", r), null);
+		assert.equal(calls, 2);
 	});
 });

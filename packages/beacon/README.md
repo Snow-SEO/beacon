@@ -100,10 +100,10 @@ That is the whole configuration. `dir` reads the twins the CLI wrote, so there i
 sync with your pages.
 
 `siteUrl` must be your real public origin. Every self-referencing URL is built from it: the twin's
-`rel="canonical"`, `sitemap-md.xml`, and the robots.txt `Sitemap:` line. If it falls back to
-`http://localhost:3000` because an environment variable is unset, each twin will tell Google and every AI
-crawler that its authoritative copy lives on a host they cannot reach. Beacon logs a warning when it sees a
-loopback `siteUrl` in a production build, but it cannot detect a merely wrong one.
+`rel="alternate"` back-link, `sitemap-md.xml`, and the robots.txt `Sitemap:` line. If it falls back to
+`http://localhost:3000` because an environment variable is unset, each twin will point every AI crawler at a
+host it cannot reach. Beacon logs a warning when it sees a loopback `siteUrl` in a production build, but it
+cannot detect a merely wrong one.
 
 **A purely static host needs no runtime at all.** Netlify, Vercel static, S3, GitHub Pages and Cloudflare
 Pages already serve `/pricing.md` as a file once `beacon build` has written it, and `llms.txt` and
@@ -217,7 +217,7 @@ Accept: text/markdown
 200 OK
 Content-Type: text/markdown; charset=utf-8
 Vary: Accept
-X-Robots-Tag: index, follow
+X-Robots-Tag: noindex, follow
 X-Markdown-Tokens: 412
 Content-Signal: ai-train=yes, search=yes, ai-input=yes
 ```
@@ -227,8 +227,8 @@ GET /pricing.md
 
 200 OK
 Content-Type: text/markdown; charset=utf-8
-Link: <https://example.com/pricing>; rel="canonical"
-X-Robots-Tag: index, follow
+Link: <https://example.com/pricing>; rel="alternate"; type="text/html"
+X-Robots-Tag: noindex, follow
 ```
 
 And the HTML page advertises its twin:
@@ -256,25 +256,58 @@ The twin is served on `Accept: text/markdown` and on the `.md` URL. Never on who
 different content to a crawler than to a browser based on its User-Agent is cloaking, and Google says so
 explicitly. Everything here is available to any client that sends the header.
 
-### Why `index, follow` and not `noindex`
+### Why `noindex` and `rel="alternate"`
 
-The AEO v1.0 spec makes `X-Robots-Tag: noindex` on twins a MUST. We deliberately do not.
+Twins are held out of search by default, and the back-link to the HTML page is
+`rel="alternate"`, not `rel="canonical"`.
 
-`noindex` is the documented opt-out from ChatGPT surfacing, so putting it on a twin throws away the exact crawl the twin exists to attract. Cloudflare's own edge implementation serves twins as `index, follow`. Duplicate content is solved properly with `Link: rel="canonical"`, which keeps the twin crawlable while ranking consolidates onto the HTML page. Google documents that header for non-HTML documents.
+A raw `.md` reaching a search result is a certain harm: unstyled text, no
+navigation, no conversion path. The case for leaving twins indexable rests on
+assistants preferring the twin over the HTML page once both are indexed, which
+is plausible but unproven. `noindex` governs indexing, not fetching, so it
+changes nothing for the paths that matter here: content negotiation, and an
+agent following the `rel="alternate"` link from the HTML page.
 
-If you want `noindex` anyway, pass it explicitly via `headers`. We just will not do it to you by default.
+`follow` rather than `nofollow`, so links inside the twin still count for
+discovery.
+
+The back-link is deliberately not a canonical. A canonical asks for the twin's
+signals to be consolidated onto the HTML page while the `noindex` asks for the
+URL to be dropped, and the risk of pairing them is that the drop is applied to
+the consolidated cluster rather than the twin alone. Shipped implementations
+pick one or the other: Next.js and Vercel canonicalise and stay indexable,
+Stripe sends `X-Robots-Tag: none` and no canonical. None combines them.
+
+`rel="alternate"` still tells an assistant that fetched the `.md` which URL to
+cite, without invoking canonicalisation.
+
+To make twins indexable instead, set `X-Robots-Tag` yourself via `headers` and
+pair it with your own `rel="canonical"`. Just do not send both directives.
 
 ## Discovery
 
 `beacon build` writes `llms.txt` and `sitemap-md.xml` into the output directory, so on a static host there is
-nothing else to do. Reference the twin sitemap from `robots.txt`:
+nothing else to do.
+
+Agents find twins three ways, none of which needs a sitemap: the `.md` URL itself, `Accept: text/markdown` on
+the HTML URL, and the `Link: rel="alternate"` header on every page. `llms.txt` indexes the lot. Point agents
+at it from `robots.txt` with a comment, which is not a crawl directive and so costs nothing:
 
 ```
-Sitemap: https://example.com/sitemap-md.xml
+# Markdown index: https://example.com/llms.txt
 ```
 
-Twins go in their own sitemap on purpose: doubling URLs in your primary sitemap is a real crawl-budget cost
-on a large site, and keeping them separate means you can measure and revert the change on its own.
+**Do not add `Sitemap: .../sitemap-md.xml` to `robots.txt` while twins are `noindex`.** A `Sitemap:` line is a
+search-engine directive - it asks Google and Bing to index what it lists. Submitting URLs you have marked
+`noindex` earns a "Submitted URL marked noindex" in Search Console, once per twin, and feeds the twins to any
+crawler that expands robots-declared sitemaps, which then audits markdown files as if they were pages.
+
+`sitemap-md.xml` is still worth writing. It carries `lastmod` per twin, which `llms.txt` has no field for, and
+it stays reachable for anything that asks. It simply is not announced to search engines.
+
+Twins go in their own sitemap rather than your primary one on purpose: doubling URLs in the sitemap you *do*
+submit is a real crawl-budget cost on a large site, and keeping them separate means you can measure and revert
+the change on its own.
 
 If you generate those files dynamically instead - a CMS with `resolve`, say - build them at runtime:
 
@@ -298,6 +331,13 @@ export async function GET() {
   });
 }
 ```
+
+```ts
+beacon.robotsLlmsDirective(); // "# Markdown index: https://example.com/llms.txt"
+```
+
+`robotsDirective()` builds the `Sitemap:` line if you want it, but see the warning above: it only belongs in
+`robots.txt` if you have made your twins indexable.
 
 ```ts
 beacon.robotsDirective(); // "Sitemap: https://example.com/sitemap-md.xml"

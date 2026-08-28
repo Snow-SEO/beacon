@@ -23,7 +23,7 @@ import {
 
 export interface ResolvedMarkdown {
 	markdown: string;
-	canonicalUrl?: string;
+	htmlUrl?: string;
 	originalTokens?: number;
 	cacheControl?: string;
 }
@@ -45,6 +45,8 @@ export interface BeaconConfig {
 		host?: string;
 	};
 	strictNegotiation?: boolean;
+	getIp?: (request: Request) => string | null | undefined;
+	exists?: (path: string, request: Request) => Promise<boolean> | boolean;
 }
 
 export interface HandleContext extends WaitUntilContext {
@@ -105,8 +107,8 @@ export class Beacon {
 			askedForMarkdown: true,
 		});
 		return markdownResponse(resolved.markdown, {
-			canonicalUrl: wantsMarkdownUrl
-				? (resolved.canonicalUrl ?? `${this.siteUrl}${htmlPath}`)
+			htmlUrl: wantsMarkdownUrl
+				? (resolved.htmlUrl ?? `${this.siteUrl}${htmlPath}`)
 				: undefined,
 			originalTokens: resolved.originalTokens,
 			cacheControl: resolved.cacheControl,
@@ -139,13 +141,18 @@ export class Beacon {
 		ctx?: HandleContext,
 	): Promise<Response> {
 		const url = new URL(request.url);
-		if (!(await this.resolveMarkdown(url.pathname, request))) {
+		if (!(await this.hasTwin(url.pathname, request))) {
 			this.track(request, { ...ctx, format: "html", path: url.pathname });
 			return response;
 		}
 		return this.advertise(request, response, ctx);
 	}
+
 	async hasTwin(path: string, request: Request): Promise<boolean> {
+		const exists = this.config.exists;
+		if (exists) {
+			return (await exists(path, request)) === true;
+		}
 		return (await this.resolveMarkdown(path, request)) !== null;
 	}
 	track(
@@ -170,7 +177,7 @@ export class Beacon {
 				format: ctx?.format,
 				statusCode: ctx?.statusCode,
 				referrer: request.headers.get("referer") ?? undefined,
-				ip: clientIp(request),
+				ip: clientIp(request, this.config.getIp),
 				method: request.method,
 				signature,
 				signatureInput,
@@ -193,7 +200,10 @@ export class Beacon {
 			headers: {
 				"Content-Type": "text/plain; charset=utf-8",
 				"Cache-Control": "public, max-age=3600",
-				"X-Robots-Tag": "index, follow",
+				// A manifest, not content. Agents fetch it directly at its
+				// well-known path, so it never needs to be in a search index, and
+				// a bare list of links has no business ranking on its own.
+				"X-Robots-Tag": "noindex, follow",
 			},
 		});
 	}
@@ -214,6 +224,9 @@ export class Beacon {
 	}
 	robotsDirective(sitemapPath = "/sitemap-md.xml"): string {
 		return robotsSitemapDirective(`${this.siteUrl}${sitemapPath}`);
+	}
+	robotsLlmsDirective(llmsPath = "/llms.txt"): string {
+		return `# Markdown index: ${this.siteUrl}${llmsPath}`;
 	}
 }
 
@@ -257,15 +270,34 @@ const IP_HEADERS = [
 	"cf-connecting-ip",
 	"x-real-ip",
 	"true-client-ip",
+	"fastly-client-ip",
+	"fly-client-ip",
 	"x-vercel-forwarded-for",
 	"x-forwarded-for",
 ];
 
-function clientIp(request: Request): string | undefined {
+const IPV4_MAPPED_IPV6 = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
+
+function normalizeIp(value: string | null | undefined): string | undefined {
+	const first = value?.split(",")[0]?.trim();
+	if (!first) {
+		return undefined;
+	}
+	return IPV4_MAPPED_IPV6.exec(first)?.[1] ?? first;
+}
+
+function clientIp(
+	request: Request,
+	getIp?: BeaconConfig["getIp"],
+): string | undefined {
+	const custom = normalizeIp(getIp?.(request));
+	if (custom) {
+		return custom;
+	}
 	for (const header of IP_HEADERS) {
-		const value = request.headers.get(header);
+		const value = normalizeIp(request.headers.get(header));
 		if (value) {
-			return value.split(",")[0]?.trim();
+			return value;
 		}
 	}
 	return undefined;

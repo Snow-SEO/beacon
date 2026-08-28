@@ -90,7 +90,7 @@ describe("node adapter", () => {
 		assert.match(res.headers.get("content-type") ?? "", MARKDOWN_TYPE);
 		assert.equal(
 			res.headers.get("link"),
-			'<https://e.com/pricing>; rel="canonical"',
+			'<https://e.com/pricing>; rel="alternate"; type="text/html"',
 		);
 	});
 	it("appends to an existing Link rather than clobbering it", async () => {

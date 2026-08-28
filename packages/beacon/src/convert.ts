@@ -11,7 +11,6 @@ const VOID_CONTENT_TAGS = new Set([
 	"canvas",
 	"template",
 	"head",
-	"iframe",
 	"object",
 	"form",
 ]);
@@ -93,6 +92,19 @@ const NAMED_ENTITIES: Record<string, string> = {
 	bull: "*",
 };
 
+// The HTML Latin-1 entities are contiguous from 160, so the names alone carry
+// the table. Without them `caf&eacute;` reached the twin verbatim, which is how
+// most older CMSs write accented text. Existing entries above win, keeping the
+// deliberate ASCII forms (`copy` stays "(c)", not "©").
+const LATIN1_ENTITY_NAMES =
+	"nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml";
+
+for (const [offset, name] of LATIN1_ENTITY_NAMES.split(" ").entries()) {
+	if (!(name in NAMED_ENTITIES)) {
+		NAMED_ENTITIES[name] = String.fromCharCode(160 + offset);
+	}
+}
+
 const ENTITY_RE = /&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g;
 
 export function decodeEntities(text: string): string {
@@ -107,7 +119,9 @@ export function decodeEntities(text: string): string {
 				? String.fromCodePoint(code)
 				: match;
 		}
-		return NAMED_ENTITIES[entity.toLowerCase()] ?? match;
+		return (
+			NAMED_ENTITIES[entity] ?? NAMED_ENTITIES[entity.toLowerCase()] ?? match
+		);
 	});
 }
 
@@ -175,6 +189,23 @@ function parseAttrs(raw: string): Record<string, string> {
 	return attrs;
 }
 
+const CODE_LANGUAGE_RE = /(?:^|\s)(?:language|lang)-([a-zA-Z0-9+#.-]+)/;
+
+const RAW_TEXT_TAGS = new Set(["script", "style", "textarea", "title"]);
+
+function closeTagIndex(
+	rest: string,
+	tag: string,
+): { content: number; after: number } {
+	const close = new RegExp(`</${tag}(?:\\s[^>]*)?>`, "i");
+	const found = close.exec(rest);
+	// Unterminated: treat the remainder as content, so a truncated page loses
+	// only what came after the opening tag rather than looping.
+	return found
+		? { content: found.index, after: found.index + found[0].length }
+		: { content: rest.length, after: rest.length };
+}
+
 function tokenize(html: string): Token[] {
 	const tokens: Token[] = [];
 	let lastIndex = 0;
@@ -193,14 +224,37 @@ function tokenize(html: string): Token[] {
 	while (match !== null) {
 		pushText(html.slice(lastIndex, match.index));
 		const tag = (match[2] ?? "").toLowerCase();
+		const isClose = Boolean(match[1]);
+		const selfClosing = Boolean(match[4]) || VOID_TAGS.has(tag);
 		tokens.push({
-			kind: match[1] ? "close" : "open",
+			kind: isClose ? "close" : "open",
 			tag,
-			attrs: match[1] ? {} : parseAttrs(match[3] ?? ""),
+			attrs: isClose ? {} : parseAttrs(match[3] ?? ""),
 			text: "",
-			selfClosing: Boolean(match[4]) || VOID_TAGS.has(tag),
+			selfClosing,
 		});
 		lastIndex = match.index + match[0].length;
+
+		// Raw text elements hold no markup, so their contents must be taken
+		// verbatim rather than scanned for tags. `for (i = 0; i < n; i++)` in a
+		// script would otherwise tokenize as an open `<n>` whose attributes run
+		// to the next `>`, swallowing the `</script>` and every element after
+		// it - the whole page converted to nothing.
+		if (!(isClose || selfClosing) && RAW_TEXT_TAGS.has(tag)) {
+			const rest = html.slice(lastIndex);
+			const end = closeTagIndex(rest, tag);
+			pushText(rest.slice(0, end.content));
+			tokens.push({
+				kind: "close",
+				tag,
+				attrs: {},
+				text: "",
+				selfClosing: false,
+			});
+			lastIndex += end.after;
+			TAG_RE.lastIndex = lastIndex;
+		}
+
 		match = TAG_RE.exec(html);
 	}
 	pushText(html.slice(lastIndex));
@@ -260,6 +314,8 @@ function resolveUrl(url: string, baseUrl?: string): string {
 interface ListFrame {
 	ordered: boolean;
 	index: number;
+	/** Marker written but not yet joined to content, e.g. "-" or "3.". */
+	pendingMarker: string | null;
 }
 
 export function htmlToMarkdown(
@@ -278,6 +334,9 @@ export function htmlToMarkdown(
 	let skipDepth = 0;
 	let skipTag = "";
 	let preDepth = 0;
+	let preFenceIndex = -1;
+	let pendingTitle: string | null = null;
+	let pendingAbbr: string | null = null;
 	let quoteDepth = 0;
 	let line = "";
 	let pendingHref: string | null = null;
@@ -285,12 +344,27 @@ export function htmlToMarkdown(
 	const tableRow: string[] = [];
 	let tableCell: string | null = null;
 	let tableRowCount = 0;
+	let tableDepth = 0;
 	const flushLine = () => {
 		const trimmed = line.replace(/[ \t]+$/g, "");
+		const frame = lists.at(-1);
+		// Only the marker so far. Hold it, so it lands on the same line as the
+		// item's first content rather than alone: a block element opening inside
+		// an <li> flushes before any text has been written.
+		if (frame?.pendingMarker && trimmed === frame.pendingMarker) {
+			return;
+		}
 		if (trimmed.trim()) {
-			out.push(
-				quoteDepth > 0 ? `${"> ".repeat(quoteDepth)}${trimmed}` : trimmed,
-			);
+			// Everything after an item's first line has to be indented, or markdown
+			// ends the item and reads the rest as a sibling paragraph.
+			const body =
+				frame && frame.pendingMarker === null
+					? `${"  ".repeat(lists.length)}${trimmed}`
+					: trimmed;
+			if (frame) {
+				frame.pendingMarker = null;
+			}
+			out.push(quoteDepth > 0 ? `${"> ".repeat(quoteDepth)}${body}` : body);
 		} else if (out.length > 0 && out.at(-1) !== "") {
 			out.push("");
 		}
@@ -355,6 +429,31 @@ export function htmlToMarkdown(
 					flushLine();
 					out.push("---", "");
 					break;
+				case "abbr":
+					pendingAbbr = attrs.title ?? null;
+					break;
+				case "iframe": {
+					const src = resolveUrl(attrs.src ?? "", options.baseUrl);
+					if (src && !src.startsWith("data:")) {
+						flushLine();
+						out.push(`[${attrs.title || "Embedded content"}](${src})`, "");
+					}
+					skipDepth = 1;
+					skipTag = "iframe";
+					break;
+				}
+				case "dt":
+					flushLine();
+					line = "- **";
+					break;
+				case "dd":
+					flushLine();
+					line = "  ";
+					break;
+				case "summary":
+					flushLine();
+					line = "**";
+					break;
 				case "img": {
 					const src = resolveUrl(attrs.src ?? "", options.baseUrl);
 					if (src && !src.startsWith("data:")) {
@@ -367,10 +466,14 @@ export function htmlToMarkdown(
 				case "h3":
 				case "h4":
 				case "h5":
-				case "h6":
+				case "h6": {
 					flushLine();
-					line = `${"#".repeat(Number(tag[1]))} `;
+					// A heading inside a list item would otherwise overwrite the
+					// marker that flushLine is holding, dropping the item entirely.
+					const held = lists.at(-1)?.pendingMarker;
+					line = `${held ? `${held} ` : ""}${"#".repeat(Number(tag[1]))} `;
 					break;
+				}
 				case "p":
 				case "div":
 				case "section":
@@ -390,49 +493,88 @@ export function htmlToMarkdown(
 				case "s":
 					write("~~");
 					break;
-				case "code":
+				case "code": {
 					if (preDepth === 0) {
 						write("`");
+						break;
+					}
+					const language = CODE_LANGUAGE_RE.exec(attrs.class ?? "")?.[1];
+					// Only the first code element inside the block names it. The index
+					// stays put: the closing tag still has to widen both fences if the
+					// content itself contains backticks.
+					if (language && preFenceIndex >= 0 && out[preFenceIndex] === "```") {
+						out[preFenceIndex] = `\`\`\`${language.toLowerCase()}`;
 					}
 					break;
+				}
 				case "pre":
 					flushLine();
 					preDepth += 1;
 					out.push("```");
+					preFenceIndex = out.length - 1;
 					break;
 				case "blockquote":
 					flushLine();
 					quoteDepth += 1;
 					break;
 				case "ul":
-				case "ol":
+				case "ol": {
 					flushLine();
-					lists.push({ ordered: tag === "ol", index: 1 });
+					const start = Number.parseInt(attrs.start ?? "", 10);
+					lists.push({
+						ordered: tag === "ol",
+						index: Number.isFinite(start) && start > 0 ? start : 1,
+						pendingMarker: null,
+					});
 					break;
-				case "li":
+				}
+				case "li": {
 					flushLine();
 					line = listPrefix();
+					const frame = lists.at(-1);
+					if (frame) {
+						frame.pendingMarker = line.trimEnd();
+					}
 					break;
+				}
 				case "a":
 					pendingHref = attrs.href ?? "";
+					pendingTitle = attrs.title ?? null;
 					linkText = "";
 					break;
 				case "table":
-					flushLine();
-					tableRowCount = 0;
+					// Markdown has no nested table. A second one inside a cell would
+					// close the outer row early and strand both, so the inner one only
+					// writes its text into the cell it sits in.
+					tableDepth += 1;
+					if (tableDepth === 1) {
+						flushLine();
+						tableRowCount = 0;
+					}
 					break;
 				case "tr":
-					tableRow.length = 0;
+					if (tableDepth <= 1) {
+						tableRow.length = 0;
+					}
+					break;
+				case "thead":
+				case "tbody":
+				case "tfoot":
 					break;
 				case "th":
 				case "td":
-					tableCell = "";
+					if (tableDepth <= 1) {
+						tableCell = "";
+					} else if (tableCell) {
+						tableCell += " ";
+					}
 					break;
 				default:
 					break;
 			}
 			if (token.selfClosing && tag === "a") {
 				pendingHref = null;
+				pendingTitle = null;
 			}
 			continue;
 		}
@@ -467,11 +609,28 @@ export function htmlToMarkdown(
 					write("`");
 				}
 				break;
-			case "pre":
+			case "pre": {
 				flushLine();
 				preDepth = Math.max(0, preDepth - 1);
-				out.push("```", "");
+				// A page showing a fenced example holds ``` inside the block, which
+				// closes it early and spills the rest out as prose. The fence has to
+				// outrun the longest run the content holds, and both ends must agree,
+				// so the opening line is rewritten to match.
+				const body = preFenceIndex >= 0 ? out.slice(preFenceIndex + 1) : [];
+				const longest = body.reduce(
+					(max, line) =>
+						Math.max(max, ...(line.match(/`+/g) ?? [""]).map((r) => r.length)),
+					0,
+				);
+				const fence = "`".repeat(Math.max(3, longest + 1));
+				const opener = preFenceIndex >= 0 ? out[preFenceIndex] : undefined;
+				if (opener !== undefined) {
+					out[preFenceIndex] = fence + opener.slice(3);
+				}
+				preFenceIndex = -1;
+				out.push(fence, "");
 				break;
+			}
 			case "blockquote":
 				flushLine();
 				quoteDepth = Math.max(0, quoteDepth - 1);
@@ -488,6 +647,7 @@ export function htmlToMarkdown(
 				const frame = lists.at(-1);
 				if (frame) {
 					frame.index += 1;
+					frame.pendingMarker = null;
 				}
 				break;
 			}
@@ -495,17 +655,43 @@ export function htmlToMarkdown(
 				const href = resolveUrl(pendingHref ?? "", options.baseUrl);
 				const text = linkText.trim();
 				pendingHref = null;
-				const rendered = href && text ? `[${text}](${href})` : text;
+				const title = pendingTitle
+					? ` "${pendingTitle.replaceAll('"', "'")}"`
+					: "";
+				pendingTitle = null;
+				const rendered = href && text ? `[${text}](${href}${title})` : text;
 				linkText = "";
 				write(rendered);
 				break;
 			}
+			case "dt":
+				write("**");
+				flushLine();
+				break;
+			case "summary":
+				write("**");
+				flushLine();
+				break;
+			case "abbr":
+				if (pendingAbbr) {
+					write(` (${pendingAbbr})`);
+					pendingAbbr = null;
+				}
+				break;
 			case "th":
 			case "td":
-				tableRow.push((tableCell ?? "").replace(/\s+/g, " ").trim());
+				if (tableDepth > 1) {
+					break;
+				}
+				tableRow.push(
+					(tableCell ?? "").replace(/\s+/g, " ").trim().replaceAll("|", "\\|"),
+				);
 				tableCell = null;
 				break;
 			case "tr":
+				if (tableDepth > 1) {
+					break;
+				}
 				if (tableRow.length > 0) {
 					out.push(`| ${tableRow.join(" | ")} |`);
 					tableRowCount += 1;
@@ -515,8 +701,15 @@ export function htmlToMarkdown(
 				}
 				tableRow.length = 0;
 				break;
+			case "thead":
+			case "tbody":
+			case "tfoot":
+				break;
 			case "table":
-				out.push("");
+				tableDepth = Math.max(0, tableDepth - 1);
+				if (tableDepth === 0) {
+					out.push("");
+				}
 				break;
 			default:
 				if (BLOCK_TAGS.has(tag)) {
