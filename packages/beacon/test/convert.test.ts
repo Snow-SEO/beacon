@@ -489,3 +489,44 @@ describe("headers", () => {
 		assert.ok(md.includes("# Real Title"));
 	});
 });
+
+describe("metadata source", () => {
+	it("prefers og:title, which carries no site suffix", () => {
+		const meta = extractMetadata(
+			`<html><head>
+				<title>Pricing | Acme</title>
+				<meta property="og:title" content="Pricing">
+			</head><body></body></html>`,
+		);
+		assert.equal(meta.title, "Pricing");
+	});
+	it("falls back to title when there is no og:title", () => {
+		const meta = extractMetadata(
+			`<html><head><title>Pricing | Acme</title></head><body></body></html>`,
+		);
+		assert.equal(meta.title, "Pricing | Acme");
+	});
+	it("reads either attribute order", () => {
+		const meta = extractMetadata(
+			`<html><head><meta content="Reversed" property="og:title"></head></html>`,
+		);
+		assert.equal(meta.title, "Reversed");
+	});
+	it("prefers the meta description over og:description", () => {
+		// The meta description is the one search engines were given, so it is the
+		// one the author tuned. og:description is the fallback, not the default.
+		const meta = extractMetadata(
+			`<html><head>
+				<meta name="description" content="The real one.">
+				<meta property="og:description" content="The card one.">
+			</head></html>`,
+		);
+		assert.equal(meta.description, "The real one.");
+	});
+	it("falls back to og:description when no meta description exists", () => {
+		const meta = extractMetadata(
+			`<html><head><meta property="og:description" content="Only this."></head></html>`,
+		);
+		assert.equal(meta.description, "Only this.");
+	});
+});

@@ -1,6 +1,6 @@
 {
 	"name": "@snowseo/beacon",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"description": "Serve Markdown twins to AI crawlers, make them discoverable, and measure which crawlers actually arrive.",
 	"keywords": [
 		"ai",

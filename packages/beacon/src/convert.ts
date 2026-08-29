@@ -250,6 +250,17 @@ const META_DESC_NAME_FIRST_RE =
 const META_DESC_CONTENT_FIRST_RE =
 	/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i;
 
+// Both attribute orders, because a meta tag can be written either way and
+// frameworks disagree about which they emit.
+const OG_TITLE_PROPERTY_FIRST_RE =
+	/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i;
+
+const OG_TITLE_CONTENT_FIRST_RE =
+	/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']/i;
+
+const OG_DESC_PROPERTY_FIRST_RE =
+	/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i;
+
 const EMPTY_INLINE_RE =
 	/<(i|b|em|strong|span|u|s|mark|small|sub|sup)\b[^>]*>\s*<\/\1>/gi;
 
@@ -879,10 +890,18 @@ export function extractMetadata(html: string): {
 	title: string | null;
 	description: string | null;
 } {
-	const title = TITLE_RE.exec(html)?.[1];
+	// og:title first. A <title> usually carries a site suffix - "Pricing |
+	// Acme" - because it has to stand alone in a search result. An og:title is
+	// written for a card that already shows the site, so it is normally just the
+	// page. The twin wants the page.
+	const title =
+		OG_TITLE_PROPERTY_FIRST_RE.exec(html)?.[1] ??
+		OG_TITLE_CONTENT_FIRST_RE.exec(html)?.[1] ??
+		TITLE_RE.exec(html)?.[1];
 	const description =
 		META_DESC_NAME_FIRST_RE.exec(html)?.[1] ??
-		META_DESC_CONTENT_FIRST_RE.exec(html)?.[1];
+		META_DESC_CONTENT_FIRST_RE.exec(html)?.[1] ??
+		OG_DESC_PROPERTY_FIRST_RE.exec(html)?.[1];
 	return {
 		title: title ? decodeEntities(title).trim() : null,
 		description: description ? decodeEntities(description).trim() : null,
