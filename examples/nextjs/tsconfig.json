@@ -4,7 +4,7 @@
 		"lib": ["ES2022", "DOM"],
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
-		"jsx": "preserve",
+		"jsx": "react-jsx",
 		"strict": true,
 		"skipLibCheck": true,
 		"esModuleInterop": true,
@@ -13,9 +13,20 @@
 		"incremental": true,
 		"resolveJsonModule": true,
 		"isolatedModules": true,
-		"plugins": [{ "name": "next" }],
-		"paths": { "@/*": ["./src/*"] }
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"paths": {
+			"@/*": ["./src/*"]
+		}
 	},
-	"include": ["src", "next-env.d.ts", ".next/types/**/*.ts"],
+	"include": [
+		"src",
+		"next-env.d.ts",
+		".next/types/**/*.ts",
+		".next/dev/types/**/*.ts"
+	],
 	"exclude": ["node_modules"]
 }

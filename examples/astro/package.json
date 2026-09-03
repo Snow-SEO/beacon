@@ -10,12 +10,12 @@
 		"type-check": "astro check"
 	},
 	"dependencies": {
-		"@snowseo/beacon": "^0.1.2",
-		"astro": "^5.13.0"
+		"@snowseo/beacon": "workspace:^",
+		"astro": "^7.2.10"
 	},
 	"devDependencies": {
-		"@astrojs/check": "^0.9.4",
-		"@types/node": "^22.10.2",
+		"@astrojs/check": "^0.9.10",
+		"@types/node": "^22.20.1",
 		"typescript": "5.9.2"
 	}
 }
