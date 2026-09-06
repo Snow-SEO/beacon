@@ -7,6 +7,8 @@ export {
 	type AnalyticsConfig,
 	BeaconAnalytics,
 	type BeaconHit,
+	COLLECTORS,
+	type CollectorName,
 	DEFAULT_INGEST_ENDPOINT,
 	INGEST_PATH,
 	normalizeIngestEndpoint,

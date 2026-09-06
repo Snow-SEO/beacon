@@ -38,12 +38,24 @@ export type MarkdownResolver = (
 	| null;
 
 export interface BeaconConfig {
-	siteUrl: string;
+	/**
+	 * Your public origin, e.g. `https://example.com`.
+	 *
+	 * Required for anything that mints a URL — Markdown twins, `llmsTxt`,
+	 * `sitemap`, `markdownUrlFor`. A **reporting-only** beacon (see
+	 * {@link createBeacon}) mints no URLs, so it may be omitted there; the
+	 * collector resolves the site from the API key instead.
+	 */
+	siteUrl?: string;
 	dir?: string;
 	resolve?: MarkdownResolver;
-	analytics?: Omit<AnalyticsConfig, "host"> & {
-		host?: string;
-	};
+	analytics?: AnalyticsConfig;
+	/**
+	 * Answer `406` when a request accepts neither HTML nor Markdown. Defaults to
+	 * `true` when this beacon serves twins and `false` when it is
+	 * reporting-only, where refusing a request it will never answer would only
+	 * break the site's own JSON endpoints.
+	 */
 	strictNegotiation?: boolean;
 	getIp?: (request: Request) => string | null | undefined;
 	exists?: (path: string, request: Request) => Promise<boolean> | boolean;
@@ -54,29 +66,53 @@ export interface HandleContext extends WaitUntilContext {
 }
 
 export class Beacon {
+	/** Empty on a reporting-only beacon; use {@link requireSiteUrl} internally. */
 	readonly siteUrl: string;
+	/** True when this beacon only reports crawler hits and serves no twins. */
+	readonly reportingOnly: boolean;
 	private readonly config: BeaconConfig;
 	private readonly resolve: MarkdownResolver;
 	private readonly analytics: BeaconAnalytics | null;
 	constructor(config: BeaconConfig) {
 		this.config = config;
-		this.siteUrl = config.siteUrl.replace(TRAILING_SLASHES, "");
-		warnOnLoopbackSiteUrl(this.siteUrl);
+		this.siteUrl = (config.siteUrl ?? "").replace(TRAILING_SLASHES, "");
+		if (this.siteUrl) {
+			warnOnLoopbackSiteUrl(this.siteUrl);
+		}
+		this.reportingOnly = !(config.resolve || config.dir);
 		if (config.resolve) {
 			this.resolve = config.resolve;
 		} else if (config.dir) {
 			this.resolve = createDirResolver(config.dir);
+		} else if (config.analytics) {
+			// Reporting-only. Measuring crawlers and serving them Markdown are
+			// separate jobs, and the config for "just measure" used to be a
+			// `resolve: () => null` whose only purpose was to satisfy this check —
+			// boilerplate that read like it did something.
+			this.resolve = () => null;
 		} else {
 			throw new Error(
-				"[beacon] createBeacon needs either `dir` (a directory of twins from `beacon build`) or `resolve`.",
+				"[beacon] createBeacon needs `dir` (a directory of twins from `beacon build`), `resolve`, or `analytics` for a reporting-only install.",
 			);
 		}
 		this.analytics = config.analytics
 			? new BeaconAnalytics({
 					...config.analytics,
-					host: config.analytics.host ?? new URL(this.siteUrl).hostname,
+					host: config.analytics.host ?? hostOf(this.siteUrl),
 				})
 			: null;
+	}
+	/**
+	 * The origin, or a message naming the option that is missing. Only the
+	 * URL-minting methods need it, so a reporting-only beacon never reaches this.
+	 */
+	private requireSiteUrl(feature: string): string {
+		if (!this.siteUrl) {
+			throw new Error(
+				`[beacon] ${feature} needs \`siteUrl\` — it mints absolute URLs. Pass siteUrl to createBeacon.`,
+			);
+		}
+		return this.siteUrl;
 	}
 	async handle(
 		request: Request,
@@ -87,7 +123,8 @@ export class Beacon {
 		const wantsMarkdownUrl = isMarkdownPath(url.pathname);
 		const format = negotiateFormat(accept);
 		if (!wantsMarkdownUrl && format !== "markdown") {
-			if (format === null && this.config.strictNegotiation !== false) {
+			const strict = this.config.strictNegotiation ?? !this.reportingOnly;
+			if (format === null && strict) {
 				return notAcceptableResponse();
 			}
 			return null;
@@ -108,7 +145,8 @@ export class Beacon {
 		});
 		return markdownResponse(resolved.markdown, {
 			htmlUrl: wantsMarkdownUrl
-				? (resolved.htmlUrl ?? `${this.siteUrl}${htmlPath}`)
+				? (resolved.htmlUrl ??
+					`${this.requireSiteUrl("Markdown twins")}${htmlPath}`)
 				: undefined,
 			originalTokens: resolved.originalTokens,
 			cacheControl: resolved.cacheControl,
@@ -193,7 +231,7 @@ export class Beacon {
 		this.analytics?.flush(ctx);
 	}
 	markdownUrlFor(path: string): string {
-		return `${this.siteUrl}${toMarkdownPath(path)}`;
+		return `${this.requireSiteUrl("markdownUrlFor")}${toMarkdownPath(path)}`;
 	}
 	llmsTxt(options: LlmsTxtOptions): Response {
 		return new Response(renderLlmsTxt(options), {
@@ -212,7 +250,7 @@ export class Beacon {
 			const value = typeof entry === "string" ? { url: entry } : { ...entry };
 			value.url = value.url.startsWith("http")
 				? value.url
-				: `${this.siteUrl}${toMarkdownPath(value.url)}`;
+				: `${this.requireSiteUrl("sitemap")}${toMarkdownPath(value.url)}`;
 			return value;
 		});
 		return new Response(buildMdSitemap(absolute), {
@@ -223,10 +261,12 @@ export class Beacon {
 		});
 	}
 	robotsDirective(sitemapPath = "/sitemap-md.xml"): string {
-		return robotsSitemapDirective(`${this.siteUrl}${sitemapPath}`);
+		return robotsSitemapDirective(
+			`${this.requireSiteUrl("robotsDirective")}${sitemapPath}`,
+		);
 	}
 	robotsLlmsDirective(llmsPath = "/llms.txt"): string {
-		return `# Markdown index: ${this.siteUrl}${llmsPath}`;
+		return `# Markdown index: ${this.requireSiteUrl("robotsLlmsDirective")}${llmsPath}`;
 	}
 }
 
@@ -242,6 +282,18 @@ function isFromBrowser(request: Request): boolean {
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
+
+/** Hostname of an origin, or undefined when there is no origin to read. */
+function hostOf(siteUrl: string): string | undefined {
+	if (!siteUrl) {
+		return undefined;
+	}
+	try {
+		return new URL(siteUrl).hostname;
+	} catch {
+		return undefined;
+	}
+}
 
 function warnOnLoopbackSiteUrl(siteUrl: string): void {
 	if (
