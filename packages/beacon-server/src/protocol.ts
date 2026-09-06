@@ -29,7 +29,12 @@ export interface IncomingHit {
 }
 
 export interface IngestRequestBody {
-	host: string;
+	/**
+	 * The site the hits belong to. Optional on the wire: a key identifies one
+	 * site, so a server that knows its keys can resolve the host itself. Servers
+	 * that cannot must reject a batch without one.
+	 */
+	host?: string;
 	hits: IncomingHit[];
 }
 
@@ -70,11 +75,16 @@ export function validateIngestBody(value: unknown): string | null {
 		return "body must be a JSON object";
 	}
 	const body = value as Partial<IngestRequestBody>;
-	if (typeof body.host !== "string" || body.host.length === 0) {
-		return "`host` must be a non-empty string";
-	}
-	if (body.host.length > MAX_HOST_LENGTH) {
-		return `\`host\` exceeds ${MAX_HOST_LENGTH} characters`;
+	// Optional: a key belongs to a known set of hosts, so a server can resolve
+	// the site itself. Present-but-empty is still an error — that is a client
+	// sending a value it failed to compute, not one deliberately omitting it.
+	if (body.host !== undefined) {
+		if (typeof body.host !== "string" || body.host.length === 0) {
+			return "`host` must be a non-empty string when present";
+		}
+		if (body.host.length > MAX_HOST_LENGTH) {
+			return `\`host\` exceeds ${MAX_HOST_LENGTH} characters`;
+		}
 	}
 	if (!Array.isArray(body.hits) || body.hits.length === 0) {
 		return "`hits` must be a non-empty array";

@@ -6,7 +6,23 @@ import {
 
 export const INGEST_PATH = "/beacon/hits";
 
-export const DEFAULT_INGEST_ENDPOINT = "https://api.snowseo.com/v3/beacon/hits";
+/**
+ * Hosted collectors that speak this protocol, by name.
+ *
+ * Beacon is a protocol client, not one product's SDK, but the endpoint default
+ * only ever named SnowSEO — so pointing it anywhere else meant spelling out a
+ * full URL, and getting that URL subtly wrong (a bare origin, or the wrong
+ * mount path) fails as an opaque `401` rather than a 404. Naming the collectors
+ * removes the URL from the install entirely.
+ */
+export const COLLECTORS = {
+	"snow-analytics": "https://api.snowanalytics.app/api/beacon/hits",
+	snowseo: "https://api.snowseo.com/v3/beacon/hits",
+} as const;
+
+export type CollectorName = keyof typeof COLLECTORS;
+
+export const DEFAULT_INGEST_ENDPOINT = COLLECTORS.snowseo;
 
 const DEFAULT_BATCH_SIZE = 25;
 
@@ -29,6 +45,30 @@ export function normalizeIngestEndpoint(endpoint: string): string {
 	return url.toString();
 }
 
+/**
+ * `endpoint` (self-hosted) beats `collector` (hosted by name) beats the
+ * historical default, which stays SnowSEO so existing installs are unaffected.
+ */
+function resolveEndpoint(
+	config: Pick<AnalyticsConfig, "collector" | "endpoint">,
+): string {
+	if (config.endpoint) {
+		return normalizeIngestEndpoint(config.endpoint);
+	}
+	if (config.collector) {
+		const endpoint = COLLECTORS[config.collector];
+		if (!endpoint) {
+			throw new Error(
+				`[beacon] unknown collector "${config.collector}". Known collectors: ${Object.keys(
+					COLLECTORS,
+				).join(", ")}. Pass \`endpoint\` for a self-hosted one.`,
+			);
+		}
+		return endpoint;
+	}
+	return DEFAULT_INGEST_ENDPOINT;
+}
+
 export interface BeaconHit {
 	path: string;
 	userAgent: string;
@@ -48,7 +88,20 @@ export interface BeaconHit {
 
 export interface AnalyticsConfig {
 	key: string;
-	host: string;
+	/**
+	 * Which site the hits belong to.
+	 *
+	 * Optional: a key belongs to exactly one site, so a collector can resolve it
+	 * server-side. Send it when one key covers several hosts, or when the
+	 * collector requires it — an omitted host is simply left out of the body.
+	 */
+	host?: string;
+	/**
+	 * A hosted collector by name — the endpoint is filled in from
+	 * {@link COLLECTORS}. Ignored when `endpoint` is given.
+	 */
+	collector?: CollectorName;
+	/** A full ingest URL, for self-hosted collectors. Wins over `collector`. */
 	endpoint?: string;
 	batchSize?: number;
 	flushIntervalMs?: number;
@@ -109,8 +162,12 @@ function looksAutomated(userAgent: string | undefined): boolean {
 
 export class BeaconAnalytics {
 	private readonly config: Required<
-		Omit<AnalyticsConfig, "onError" | "fetch" | "onHit" | "disableCategories">
+		Omit<
+			AnalyticsConfig,
+			"onError" | "fetch" | "onHit" | "disableCategories" | "host" | "collector"
+		>
 	> & {
+		host?: string;
 		onError?: (error: unknown) => void;
 		onHit?: (hit: BeaconHit, match: AICrawlerMatch) => void;
 		fetch: typeof fetch;
@@ -122,9 +179,7 @@ export class BeaconAnalytics {
 		this.config = {
 			key: config.key,
 			host: config.host,
-			endpoint: config.endpoint
-				? normalizeIngestEndpoint(config.endpoint)
-				: DEFAULT_INGEST_ENDPOINT,
+			endpoint: resolveEndpoint(config),
 			batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
 			flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
 			timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
@@ -201,7 +256,9 @@ export class BeaconAnalytics {
 					"Content-Type": "application/json",
 					"X-Beacon-Key": this.config.key,
 				},
-				body: JSON.stringify({ host: this.config.host, hits }),
+				body: JSON.stringify(
+					this.config.host ? { host: this.config.host, hits } : { hits },
+				),
 				signal: controller.signal,
 				keepalive: true,
 			});

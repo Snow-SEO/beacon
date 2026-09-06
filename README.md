@@ -39,6 +39,28 @@ protocol: one `auto_prepend_file` line, no application code touched. It lives
 with the [WordPress plugin](https://github.com/Snow-SEO/snowseo-wordpress-plugin),
 which is what it is built into.
 
+## Reporting only
+
+Measuring AI crawlers and serving them Markdown are separate jobs. If you only
+want the measurement, that is the whole config:
+
+```ts
+import { createBeacon } from "@snowseo/beacon";
+
+export const beacon = createBeacon({
+  analytics: { key: process.env.SNOW_API_KEY, collector: "snow-analytics" },
+});
+```
+
+No `siteUrl` — a key belongs to one site, so the collector resolves it. No
+`resolve`, because there are no twins to serve. And `strictNegotiation`
+defaults to `false` here, so a beacon that answers nothing never turns your own
+JSON endpoints into `406`s.
+
+`collector` takes a name from `COLLECTORS`: `"snow-analytics"` or `"snowseo"`.
+Naming it beats spelling out a URL, which is easy to get subtly wrong — a bare
+origin, or the wrong mount path, fails as an opaque `401` rather than a 404.
+
 ## Running your own collector
 
 The analytics half is not tied to any hosted service. Point it wherever you

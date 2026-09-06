@@ -1012,3 +1012,75 @@ describe("fetch resolver frontmatter", () => {
 		);
 	});
 });
+
+/**
+ * The install a pure analytics user writes. Before this, "just measure
+ * crawlers" still required `siteUrl`, a `resolve: () => null` that existed only
+ * to satisfy a constructor check, and `strictNegotiation: false` to stop the
+ * beacon answering 406 for the site's own JSON endpoints — three options to
+ * switch off features the reader never asked for.
+ */
+describe("reporting-only beacons", () => {
+	it("needs nothing but a key", () => {
+		const beacon = createBeacon({
+			analytics: { collector: "snow-analytics", key: "snw_live_abc" },
+		});
+		assert.equal(beacon.reportingOnly, true);
+	});
+
+	it("never answers 406, because it serves no twins", async () => {
+		const beacon = createBeacon({
+			analytics: { collector: "snow-analytics", key: "snw_live_abc" },
+		});
+		const response = await beacon.handle(
+			new Request("https://example.com/api/data", {
+				headers: { accept: "application/json" },
+			}),
+		);
+		assert.equal(response, null, "a JSON request must pass straight through");
+	});
+
+	it("still answers 406 when it does serve twins", async () => {
+		const beacon = createBeacon({
+			resolve: () => "# hi",
+			siteUrl: "https://example.com",
+		});
+		const response = await beacon.handle(
+			new Request("https://example.com/api/data", {
+				headers: { accept: "application/json" },
+			}),
+		);
+		assert.equal(response?.status, 406);
+	});
+
+	it("lets strictNegotiation be forced back on", async () => {
+		const beacon = createBeacon({
+			analytics: { collector: "snow-analytics", key: "snw_live_abc" },
+			strictNegotiation: true,
+		});
+		const response = await beacon.handle(
+			new Request("https://example.com/api/data", {
+				headers: { accept: "application/json" },
+			}),
+		);
+		assert.equal(response?.status, 406);
+	});
+
+	// Failing here is far better than minting "undefined/page.md" into a
+	// sitemap, which is what an optional siteUrl invites.
+	it("names siteUrl when a URL-minting method needs it", () => {
+		const beacon = createBeacon({
+			analytics: { collector: "snow-analytics", key: "snw_live_abc" },
+		});
+		assert.throws(() => beacon.markdownUrlFor("/pricing"), /siteUrl/);
+	});
+
+	it("still derives the analytics host from siteUrl when given", () => {
+		const beacon = createBeacon({
+			analytics: { collector: "snow-analytics", key: "snw_live_abc" },
+			siteUrl: "https://example.com/",
+		});
+		assert.equal(beacon.siteUrl, "https://example.com");
+		assert.equal(beacon.reportingOnly, true);
+	});
+});

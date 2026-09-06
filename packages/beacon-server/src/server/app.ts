@@ -23,6 +23,16 @@ import { type BeaconKey, KeyRegistry } from "./auth.js";
 
 const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+/**
+ * The one host a key is scoped to, or undefined when it is scoped to several
+ * (or to none, meaning "any host" — which is equally unresolvable).
+ */
+function soleAllowedHost(
+	allowedHosts: readonly string[] | undefined,
+): string | undefined {
+	return allowedHosts?.length === 1 ? allowedHosts[0] : undefined;
+}
+
 export interface BeaconServerOptions {
 	store: HitStore;
 	keys: readonly BeaconKey[];
@@ -147,7 +157,22 @@ export function createBeaconServer(options: BeaconServerOptions): Server {
 			sendError(res, 400, "BAD_REQUEST", invalid);
 			return;
 		}
-		const { host, hits } = parsed as IngestRequestBody;
+		const body = parsed as IngestRequestBody;
+		// A batch may omit `host` and let the key say which site it is for, but
+		// only when the key names exactly one — with several allowed hosts there
+		// is nothing to fall back to, and guessing would file hits under the wrong
+		// site.
+		const host = body.host ?? soleAllowedHost(key.allowedHosts);
+		if (!host) {
+			sendError(
+				res,
+				400,
+				"BAD_REQUEST",
+				"`host` is required: this key is valid for more than one host, so the site cannot be inferred",
+			);
+			return;
+		}
+		const { hits } = body;
 		if (
 			key.allowedHosts &&
 			!hostMatchesAllowList(normalizeHost(host), key.allowedHosts)

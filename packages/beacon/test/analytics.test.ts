@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	BeaconAnalytics,
+	COLLECTORS,
 	DEFAULT_INGEST_ENDPOINT,
 	INGEST_PATH,
 	normalizeIngestEndpoint,
@@ -201,5 +202,78 @@ describe("BeaconAnalytics", () => {
 			}[];
 		};
 		assert.equal(body.hits[0]?.signatureAgent, '"https://agent.bot.goog"');
+	});
+
+	describe("collectors", () => {
+		it("resolves a named collector to its full ingest URL", async () => {
+			const { fetchImpl, calls } = stubFetch();
+			const analytics = new BeaconAnalytics({
+				collector: "snow-analytics",
+				fetch: fetchImpl,
+				host: "example.com",
+				key: KEY,
+			});
+			analytics.record({ path: "/", userAgent: GPTBOT });
+			const pending: Promise<unknown>[] = [];
+			analytics.flush({ waitUntil: (p) => pending.push(p) });
+			await Promise.all(pending);
+			assert.equal(calls[0]?.url, COLLECTORS["snow-analytics"]);
+		});
+
+		// The mount path is the whole reason `collector` exists: Snow Analytics
+		// serves the ingest under /api, so the bare-origin default (/beacon/hits)
+		// resolves to a route that answers an opaque 401 rather than a 404.
+		it("keeps Snow Analytics' /api mount path", () => {
+			assert.ok(
+				COLLECTORS["snow-analytics"].endsWith("/api/beacon/hits"),
+				"snow-analytics must carry its full mount path",
+			);
+		});
+
+		it("lets an explicit endpoint win over a collector", async () => {
+			const { fetchImpl, calls } = stubFetch();
+			const analytics = new BeaconAnalytics({
+				collector: "snow-analytics",
+				endpoint: "https://self.hosted.test/beacon/hits",
+				fetch: fetchImpl,
+				host: "example.com",
+				key: KEY,
+			});
+			analytics.record({ path: "/", userAgent: GPTBOT });
+			const pending: Promise<unknown>[] = [];
+			analytics.flush({ waitUntil: (p) => pending.push(p) });
+			await Promise.all(pending);
+			assert.equal(calls[0]?.url, "https://self.hosted.test/beacon/hits");
+		});
+
+		it("still defaults to SnowSEO when neither is given", () => {
+			assert.equal(DEFAULT_INGEST_ENDPOINT, COLLECTORS.snowseo);
+		});
+
+		it("names the known collectors when one is misspelled", () => {
+			assert.throws(
+				() =>
+					new BeaconAnalytics({
+						// biome-ignore lint/suspicious/noExplicitAny: deliberately invalid
+						collector: "snowanalytics" as any,
+						key: KEY,
+					}),
+				/unknown collector "snowanalytics".*snow-analytics/s,
+			);
+		});
+	});
+
+	// A key belongs to one site, so the collector can resolve it. Sending an
+	// empty `host` instead of omitting it would fail the protocol validator.
+	it("omits host from the body when none is configured", async () => {
+		const { fetchImpl, calls } = stubFetch();
+		const analytics = new BeaconAnalytics({ fetch: fetchImpl, key: KEY });
+		analytics.record({ path: "/", userAgent: GPTBOT });
+		const pending: Promise<unknown>[] = [];
+		analytics.flush({ waitUntil: (p) => pending.push(p) });
+		await Promise.all(pending);
+		const body = calls[0]?.body as Record<string, unknown>;
+		assert.ok(!("host" in body), "host must be absent, not empty");
+		assert.ok(Array.isArray(body.hits));
 	});
 });

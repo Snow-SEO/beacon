@@ -2,6 +2,45 @@
 
 Both packages are released together and share a version.
 
+## 0.1.8
+
+### Added
+
+- **Hosted collectors have names.** `analytics.collector` takes
+  `"snow-analytics"` or `"snowseo"` and fills in the ingest URL from the new
+  exported `COLLECTORS` map. The endpoint default only ever named SnowSEO, so
+  every other collector had to be spelled out as a full URL — and getting that
+  URL subtly wrong (a bare origin, or the wrong mount path) fails as an opaque
+  `401` rather than a 404. `endpoint` still wins, for self-hosted collectors.
+
+- **Reporting-only beacons.** `createBeacon({ analytics })` with no `dir` and
+  no `resolve` is now a valid, analytics-only install instead of a thrown
+  error. It used to need a `resolve: () => null` whose only purpose was to
+  satisfy that check — boilerplate that read like it did something.
+
+### Changed
+
+- **`siteUrl` is optional.** It is required only by the methods that mint
+  absolute URLs (`markdownUrlFor`, `sitemap`, `llmsTxt`, `robotsDirective`, and
+  twin responses), which now throw an error naming it. A reporting-only beacon
+  mints no URLs, so it does not need one.
+
+- **`strictNegotiation` defaults to `false` for reporting-only beacons** and
+  stays `true` when the beacon serves twins. A beacon that will never answer a
+  request has no business turning the site's own JSON endpoints into `406`s.
+  Passing the option explicitly still overrides both defaults.
+
+- **`host` is optional on the wire.** A key belongs to one site, so a collector
+  can resolve it; `@snowseo/beacon` omits `host` only when the caller gives
+  neither `siteUrl` nor `analytics.host`, and `@snowseo/beacon-server` falls
+  back to the key's host when the key names exactly one (and answers `400` when
+  it names several, where guessing would file hits under the wrong site). A
+  present-but-empty `host` is still rejected — that is a client that failed to
+  compute a value, not one deliberately leaving it out.
+
+  Existing installs are unaffected: anything passing `siteUrl` sends `host`
+  exactly as before.
+
 ## 0.1.3
 
 ### Fixed

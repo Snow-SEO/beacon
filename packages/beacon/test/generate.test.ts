@@ -19,7 +19,7 @@ const LLMS_PRIVACY_LINK = /https:\/\/example\.com\/privacy\.md/;
 
 const SITEMAP_INDEX_LOC = /<loc>https:\/\/example\.com\/index\.md<\/loc>/;
 
-const NEEDS_DIR = /needs either `dir`/;
+const NEEDS_DIR = /needs `dir`/;
 
 const PRIVACY_TWIN = /We keep very little/;
 
@@ -178,7 +178,7 @@ describe("createDirResolver", () => {
 		assert.equal(await resolve("/../../etc/passwd", request), null);
 		assert.equal(await resolve("/..%2f..%2fetc/passwd", request), null);
 	});
-	it("requires either dir or resolve", () => {
+	it("requires dir, resolve, or analytics", () => {
 		assert.throws(() => createBeacon({ siteUrl: SITE }), NEEDS_DIR);
 	});
 });

@@ -25,8 +25,17 @@ describe("validateIngestBody", () => {
 			null,
 		);
 	});
-	it("rejects a missing host", () => {
-		assert.match(validateIngestBody({ hits: [{}] }) ?? "", HOST_REQUIRED_RE);
+	// A key identifies one site, so an omitted host is a valid batch: the server
+	// resolves it. Present-but-empty stays an error — that is a client that
+	// failed to compute a value, not one deliberately leaving it out.
+	it("accepts a batch that omits host", () => {
+		assert.equal(validateIngestBody({ hits: [{}] }), null);
+	});
+	it("rejects an empty host", () => {
+		assert.match(
+			validateIngestBody({ host: "", hits: [{}] }) ?? "",
+			HOST_REQUIRED_RE,
+		);
 	});
 	it("rejects an empty hits array", () => {
 		assert.match(
